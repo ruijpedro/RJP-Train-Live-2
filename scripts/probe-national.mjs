@@ -26,7 +26,38 @@ for(const [label,url] of sources){
   if(label.startsWith("CP")&&payload){
    result.hasTravelApiUrl=typeof payload?.travelApiUrl==="string";
    result.hasApiConfiguration=typeof payload?.travelApiKey==="string";
-   // Never print the actual values.
+   // Credentials are only used in-memory for two read-only requests, and
+   // are never logged, persisted, exported or forwarded to any third party.
+   const base=String(payload?.travelApiUrl||"").replace(/\/+$/,"");
+   if(base.startsWith("https://")&&result.hasApiConfiguration&&payload.xcck&&payload.xccs){
+    const root=base.endsWith("/services/travel-api")?base:base+"/services/travel-api";
+    for(const trainNumber of ["26450","530"]){
+     const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),12000);
+     try{
+      const resp=await fetch(root+"/trains/"+trainNumber+"/timetable/"+date,{
+       headers:{"Accept":"application/json","Origin":"https://www.cp.pt",
+        "Referer":"https://www.cp.pt/",
+        "x-api-key":payload.travelApiKey,
+        "x-cp-connect-id":payload.xcck,
+        "x-cp-connect-secret":payload.xccs},
+       signal:ac.signal
+      });
+      let journey=null;
+      if(resp.ok){try{journey=await resp.json()}catch{}}
+      const hasCoords=Number.isFinite(journey?.latitude)&&Number.isFinite(journey?.longitude);
+      const stops=Array.isArray(journey?.trainStops)?journey.trainStops:[];
+      console.log("CP NATIONAL JOURNEY",JSON.stringify({
+       trainNumber,status:resp.status,
+       hasTrainData:!!journey,stopCount:stops.length,
+       hasLastStationCode:!!journey?.lastStationCode,
+       hasDelay:Number.isFinite(journey?.delay),
+       hasReportedVehicleGps:hasCoords
+      }));
+     }catch(e){console.log("CP NATIONAL JOURNEY",JSON.stringify({trainNumber,status:"unavailable",error:String(e?.name||"network-error")}))}
+     finally{clearTimeout(tm)}
+    }
+   }
+   // Never print API key, ID, secret, or response headers.
   }
   console.log("NATIONAL SOURCE",JSON.stringify(result));
  }catch(e){
