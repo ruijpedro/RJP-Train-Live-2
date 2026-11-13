@@ -36,9 +36,10 @@ jobs:
           PY
       - name: Diagnóstico do comboio R 26450
         run: python3 scripts/check_train.py --number 26450
-      - name: Instalar dependências e compilar WebApp
+      - name: Instalar dependências, testar GPS e compilar WebApp
         run: |
           npm install
+          npm test
           npm run build
       - uses: actions/upload-artifact@v4
         with:
