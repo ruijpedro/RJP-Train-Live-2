@@ -65,3 +65,7 @@ A TML publica sobretudo comboios CP da região de Lisboa. A sonda \`scripts/prob
 ## Consulta operacional nacional da CP na APK (2.0.4-beta.1)
 
 Através do botão «Consultar CP diretamente», o laboratório consulta um comboio de cada vez e apresenta o estado de circulação, atraso, última estação indicada e horários por paragem conforme o retorno da CP. A ligação usa a configuração publicada por www.cp.pt exclusivamente em memória, apenas para investigação; esta interface não é uma API oficialmente aberta para reutilização sem condições. Não se recolhem nem geram coordenadas GPS do estado operacional. Uma resposta de erro 500/401/403 é apresentada como indisponibilidade, sem aproximação da localização. Antes de aplicar à Trains original, confirmar autorização/termos e continuidade do serviço.
+
+## Catálogo nacional completo (2.0.5-beta.1)
+
+A APK permite encontrar as 1.341 circulações programadas da CP que o GTFS registou no exemplo de 13/11/2026, sem o limite de 100 resultados. Número, linha, origem, destino e paragens são pesquisáveis; a lista cresce em blocos de 80 para desempenho móvel. É possível consultar a API da CP para um comboio selecionado, sem varrer automaticamente todos os serviços. A TML continua a ser a única fonte ativa de coordenadas reais na app; a ausência de GPS permanece explícita. O total varia por data e atualizações do GTFS.

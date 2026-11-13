@@ -37,3 +37,14 @@
 .cpStop span:last-child{text-align:right;color:#8ae2fa}
 .cpResult summary{cursor:pointer;padding:9px 0;color:#a1d7f9;font-weight:bold}
 @media(max-width:800px){.cpNationalLab{padding:9px}.cpLabHead{flex-wrap:wrap}.cpLookupLine{flex-wrap:wrap}.cpLookupLine button{flex:1}}
+
+/* All nationally scheduled CP services, progressively rendered on Android */
+.catalogBtn{background:#244c69!important;border-color:#90bdeb!important}
+.catalogCount{margin:5px 0 10px;color:#add7ef;font-weight:600;font-size:12px}
+.scheduledRow{padding:0;display:flex;gap:0;align-items:stretch;overflow:hidden}
+.trainMain{padding:9px 7px;display:flex;align-items:center;gap:9px;background:transparent;color:inherit;border:0;text-align:left;flex:1;min-width:0;cursor:pointer}
+.trainMain:hover{background:#1d3a52}
+.trainLookup{flex:0 0 auto;color:#aef5f3;background:#0a4650;border:0;border-left:1px solid #427078;padding:8px 10px;font-size:11px;font-weight:bold;cursor:pointer}
+.trainLookup:hover{background:#136474}
+.loadMore{width:100%;border:1px solid #4ca5e7;border-radius:10px;background:#153d60;color:#d2f0ff;padding:14px;margin:10px 0;font-size:13px;font-weight:700;cursor:pointer}
+@media(max-width:800px){.trainLookup{padding:6px 8px;max-width:88px;white-space:normal;line-height:1.3}.trainMain{gap:6px;padding:8px 6px}.scheduledRow .hours{white-space:normal;max-width:100px}}

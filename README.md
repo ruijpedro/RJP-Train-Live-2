@@ -62,3 +62,7 @@ A APK passa a executar o motor `buildUnifiedFeed` em cada recolha TML, cruzando 
 ## 2.0.4-beta.1 — consulta CP nacional (LAB)
 
 Adiciona à APK uma consulta manual por número de comboio e data aos dados operacionais da CP: estado, atraso indicado, última estação, paragens, ETA e ETD, quando fornecidos. O acesso é efetuado por pedido explícito, com transporte HTTP nativo no Android e configuração pública do próprio website CP mantida apenas em memória. Não exporta nem regista credenciais. **Esta informação não cria posições GPS** e poderá falhar em caso de restrições ou alterações da CP. A Trains original continua inalterada. A utilização permanente/republicação requer validação das condições de acesso da CP.
+
+## 2.0.5-beta.1 — descobrir todos os comboios da CP no catálogo nacional
+
+O catálogo da aplicação deixa de limitar a apresentação às primeiras 100 circulações: os serviços são apresentados progressivamente em páginas de 80, sem perder a pesquisa por número, percurso, origem, destino ou estação. «Ver todos os CP (GTFS)» abre a lista nacional; cada serviço com número válido tem o botão «Consultar CP» que solicita o estado operacional diretamente à CP, por iniciativa do utilizador. Não são enviados pedidos automáticos para centenas de comboios: evita sobrecarga e bloqueios da fonte. Quando o mesmo número tem posição TML atual, o catálogo indica «GPS TML recebido». Os restantes são apenas horários programados e **não ficam automaticamente localizados**. Os testes impedem limites silenciosos e confundirem GTFS com GPS.

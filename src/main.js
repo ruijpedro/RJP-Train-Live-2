@@ -5,6 +5,7 @@ import {CP_AGENCY,FT_AGENCY,TML_URL,FT_FALLBACK_URL,normalizePositions,asRows} f
 import {buildUnifiedFeed} from "./unified-feed.js";
 import {fetchTmlJson,fetchRemoteJson,transportLabel} from "./native-http.js";
 import {lookupCpOperational} from "./cp-operational.js";
+import {filterCatalogue,pageCatalogue,PAGE_SIZE,cpLookupNumber} from "./train-catalog.js";
 
 const BASE = import.meta.env.BASE_URL;
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
@@ -13,13 +14,13 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.4-beta.1 · consulta operacional CP</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.5-beta.1 · catálogo nacional completo</small></div>
 </header>
-<div class="sourceNote"><strong>CP GTFS + posições TML</strong><span>Marcadores: coordenadas reportadas recentemente, nunca horários interpolados. Identificamos o número CP apenas quando corresponde a uma circulação única no GTFS. ETA e alertas ainda são diagnósticos, não informação operacional confirmada.</span></div>
+<div class="sourceNote"><strong>CP nacional + GPS TML</strong><span>Catálogo nacional: todas as circulações programadas da CP no GTFS importado. Estado operacional: consulta individual à CP. GPS no mapa: apenas coordenadas recentes publicadas pela TML — não há GPS nacional completo.</span></div>
 <div class="controls">
  <label><span>Data</span><select id="day"><option>A carregar…</option></select></label>
  <label class="searchBox"><span>Pesquisar comboio ou estação</span><input id="q" placeholder="Número, origem, destino ou paragem" autocomplete="off"/></label>
- <button id="reload">Atualizar horários e GPS</button><button id="focusGps" type="button" class="focusBtn">Ver todos os GPS</button>
+ <button id="reload">Atualizar horários e GPS</button><button id="focusGps" type="button" class="focusBtn">Ver todos os GPS</button><button id="showNational" type="button" class="catalogBtn">Ver todos os CP (GTFS)</button>
 </div>
 <div class="types" id="types"></div>
 <div class="stats"><span id="count">A carregar horários CP…</span><span id="freshness"></span><span id="gpsStatus" aria-live="polite">TML: a consultar posições…</span></div>
@@ -38,13 +39,13 @@ el.innerHTML = `
 </section>
 <div class="workspace">
  <div id="map" aria-label="Mapa de estações CP"></div>
- <section class="results"><h2>Posições reais reportadas pela TML</h2><p class="legendLab">Fonte + hora de posição · só aparece o número do comboio quando validado no GTFS da CP</p><div id="liveTrains" class="gpsResults"></div><h2>Horários CP programados (sem GPS)</h2><div id="trains"></div></section>
+ <section class="results"><h2>Posições reais reportadas pela TML</h2><p class="legendLab">Fonte + hora de posição · só aparece o número do comboio quando validado no GTFS da CP</p><div id="liveTrains" class="gpsResults"></div><h2 id="catalogHeading">Catálogo nacional CP — serviços programados</h2><p class="legendLab">Pesquisa todos os comboios do GTFS da data escolhida. Usa «Consultar CP» para pedir o estado operacional de cada circulação; o GTFS não comprova a circulação nem uma posição GPS.</p><div id="catalogCount" class="catalogCount">A carregar catálogo…</div><div id="trains"></div></section>
 </div>
 <footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. Coordenadas TML reportadas pelos operadores, com validade máxima de 3 minutos; GTFS CP = horários programados. Sem confirmação de atrasos, supressões ou cobertura nacional. Não utilizar para segurança da exploração.</footer>
 `;
 
-const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult"].map(id=>[id,document.getElementById(id)]));
-let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,ftProxyUsed=false;
+const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading"].map(id=>[id,document.getElementById(id)]));
+let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,ftProxyUsed=false,listLimit=PAGE_SIZE;
 const map=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",{maxZoom:19,opacity:.88,attribution:"OpenRailwayMap"}).addTo(map);
@@ -57,7 +58,7 @@ function sameLocation(p){return Array.isArray(p)&&p.length===2&&p.every(Number.i
 function setMessage(msg){dom.count.textContent=msg;}
 function renderTypes(){
  dom.types.innerHTML=["ALL",...TYPES].map(t=>`<button class="type ${selected===t?"active":""}" data-type="${t}" style="--type-color:${COLORS[t]||"#38bdf8"}">${t==="ALL"?"Todos":t}</button>`).join("");
- dom.types.querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=b.dataset.type;renderTypes();renderTrains();renderGps();});
+ dom.types.querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=b.dataset.type;listLimit=PAGE_SIZE;renderTypes();renderTrains();renderGps();});
 }
 
 function focusGpsMarkers(){
@@ -224,17 +225,38 @@ function viewTrain(t){
 }
 function renderTrains(){
  if(!data){renderGps();return;}
- const q=dom.q.value.trim().toLocaleLowerCase("pt-PT");
- const matches=data.trains.filter(t=>(selected==="ALL"||t.type===selected)&&(!q||[t.number,t.route,t.headsign,t.origin,t.destination,...(t.stops||[]).map(s=>s.name)].some(v=>String(v||"").toLocaleLowerCase("pt-PT").includes(q))));
- dom.count.textContent=`${matches.length} circulações programadas de ${data.trains.length} no dia ${data.date}`;
- const visible=matches.slice(0,100);
- dom.trains.innerHTML=visible.map((t,i)=>`<button class="train" data-index="${i}">
- <span class="pill" style="--type-color:${COLORS[t.type]||COLORS.CP}">${safeText(t.type)}</span>
- <span class="trainInfo"><strong>${safeText(t.number)}</strong><small>${safeText(t.origin)} → ${safeText(t.destination)}</small></span>
- <span class="hours"><b>${safeText(t.departure)} → ${safeText(t.arrival)}</b><small>previsto</small></span></button>`).join("");
- if(matches.length>100)dom.trains.innerHTML+=`<p class="limit">A mostrar 100 resultados. Pesquisa um comboio ou uma estação para restringir.</p>`;
- if(!matches.length)dom.trains.innerHTML='<p class="empty">Nenhuma circulação programada corresponde aos filtros.</p>';
+ const matches=filterCatalogue(data.trains,{type:selected,query:dom.q.value});
+ dom.count.textContent=matches.length+" circulações programadas de "+data.trains.length+" no dia "+data.date;
+ const {visible,more}=pageCatalogue(matches,listLimit);
+ dom.catalogCount.textContent="A mostrar "+visible.length+" de "+matches.length+" serviços CP encontrados ("+data.trains.length+" no GTFS nacional).";
+ const realNumbers=new Set(gpsVehicles.filter(v=>v.agency===CP_AGENCY&&v.trainNumber).map(v=>String(v.trainNumber)));
+ dom.trains.innerHTML=visible.map((t,i)=>{
+  const number=cpLookupNumber(t);
+  const actual=realNumbers.has(String(t.number));
+  return '<div class="train scheduledRow">'+
+   '<button type="button" class="trainMain" data-index="'+i+'">'+
+   '<span class="pill" style="--type-color:'+(COLORS[t.type]||COLORS.CP)+'">'+safeText(t.type)+'</span>'+
+   '<span class="trainInfo"><strong>'+safeText(t.number)+'</strong><small>'+safeText(t.origin)+" → "+safeText(t.destination)+'</small></span>'+
+   '<span class="hours"><b>'+safeText(t.departure)+" → "+safeText(t.arrival)+'</b><small>'+(actual?"GPS TML recebido":"GTFS previsto")+'</small></span></button>'+
+   (number?'<button type="button" class="trainLookup" data-cp-index="'+i+'" aria-label="Consultar CP '+safeText(number)+' diretamente">Consultar CP</button>':'')+
+   '</div>';
+ }).join("");
+ if(more)dom.trains.innerHTML+='<button type="button" id="loadMoreTrains" class="loadMore">Ver mais '+Math.min(PAGE_SIZE,more)+' comboios · '+more+' ainda por mostrar</button>';
+ if(!matches.length)dom.trains.innerHTML='<p class="empty">Não há serviços CP programados correspondentes a estes filtros nesta data.</p>';
  dom.trains.querySelectorAll("button[data-index]").forEach(b=>b.onclick=()=>viewTrain(visible[Number(b.dataset.index)]));
+ dom.trains.querySelectorAll("button[data-cp-index]").forEach(b=>b.onclick=()=>{
+  const t=visible[Number(b.dataset.cpIndex)];
+  const number=cpLookupNumber(t);
+  if(!number)return;
+  dom.cpNumber.value=number;
+  queryCpNational();
+  dom.cpResult.scrollIntoView({behavior:"smooth",block:"center"});
+ });
+ const moreButton=dom.trains.querySelector("#loadMoreTrains");
+ if(moreButton)moreButton.onclick=()=>{
+  listLimit+=PAGE_SIZE;
+  renderTrains();
+ };
  document.querySelector(".details")?.remove();
  routeLayer.clearLayers();
  renderGps();
@@ -265,10 +287,15 @@ async function load(){
   await loadDay(dom.day.value);
  }catch(e){setMessage("Não foi possível obter a base CP: "+e.message);dom.trains.innerHTML="<p class='empty'>Sem base GTFS importada. Compila o projeto através do workflow da versão 2.0.</p>";}
 }
-dom.q.addEventListener("input",()=>{renderTrains();renderGps()});
-dom.day.addEventListener("change",()=>loadDay(dom.day.value));
+dom.q.addEventListener("input",()=>{listLimit=PAGE_SIZE;renderTrains();renderGps()});
+dom.day.addEventListener("change",()=>{listLimit=PAGE_SIZE;loadDay(dom.day.value)});
 dom.reload.onclick=()=>{load();loadGps()};
 dom.focusGps.onclick=()=>focusGpsMarkers();
+dom.showNational.onclick=()=>{
+ selected="ALL";dom.q.value="";listLimit=PAGE_SIZE;
+ renderTypes();renderTrains();renderGps();
+ dom.catalogHeading.scrollIntoView({behavior:"smooth",block:"start"});
+};
 renderTypes();
 loadBuildAudit();
 load();
