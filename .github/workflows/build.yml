@@ -36,6 +36,9 @@ jobs:
           PY
       - name: Diagnóstico do comboio R 26450
         run: python3 scripts/check_train.py --number 26450
+      - name: Diagnosticar posições reais CP e Fertagus publicadas pela TML
+        continue-on-error: true
+        run: node scripts/diagnose-tml.mjs
       - name: Instalar dependências, testar GPS e compilar WebApp
         run: |
           npm install
