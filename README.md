@@ -54,3 +54,7 @@ A APK usa `CapacitorHttp.get` nativo (sem restrições CORS da WebView) para obt
 ## Pacote unificado de fontes (2.0.2-beta.1)
 
 Ver [docs/PACOTE-FONTES.md](docs/PACOTE-FONTES.md). O GitHub Actions agora disponibiliza o ZIP **RJP-Train-Live-2-Fontes-Unificadas**, com GTFS CP, posições publicadas pela TML, ETA, alertas e diagnósticos, sem alterar a Trains em produção.
+
+## 2.0.3-beta.1 — aplicação do laboratório unificado
+
+A APK passa a executar o motor `buildUnifiedFeed` em cada recolha TML, cruzando as posições reais com o GTFS da CP importado na compilação. Apresenta CP identificados, CP por identificar, Fertagus e número de circulações programadas. O diagnóstico ETA/alertas incluído na compilação é marcado como **histórico** e nunca usado como posição ao vivo. Não foi alterada a Trains original. A API Cloudflare experimental está incluída no repositório mas ainda não foi publicada.

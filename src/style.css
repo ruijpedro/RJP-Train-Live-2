@@ -5,3 +5,14 @@
 /* TML transport state and GPS framing */
 .focusBtn{background:#0e6876!important;border-color:#2dcfc2!important}
 #gpsStatus{font-weight:700;color:#8be3f2;overflow-wrap:anywhere}
+
+/* Consolidated source laboratory, intentionally not a second production Trains UI */
+.labAudit{padding:10px 16px;background:#0d2233;border-bottom:1px solid #23495b}
+.labAuditMetrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.labAuditMetrics>div{background:#17364b;border-radius:9px;padding:8px 10px;min-width:0}
+.labAuditMetrics small{display:block;color:#a9c8d9;font-size:11px}
+.labAuditMetrics b{font-size:19px;font-variant-numeric:tabular-nums;color:#f0fbff}
+.labAudit p{margin:7px 0 0;color:#b1c9dc;font-size:11px}
+.legendLab{font-size:11px;color:#94bbcd;margin:-4px 0 12px}
+.gpsRow .trainInfo small{white-space:normal}
+@media(max-width:800px){.labAudit{padding:9px}.labAuditMetrics{grid-template-columns:repeat(2,minmax(0,1fr))}.labAuditMetrics b{font-size:17px}}

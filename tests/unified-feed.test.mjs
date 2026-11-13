@@ -70,3 +70,13 @@ test("non-rail ETA never enters combined railway feed",()=>{
  assert.equal(f.coverage.tmlRailEtaRecords,1);
  assert.equal(f.vehicles[0].eta.length,1);
 });
+
+test("current CP vehicle with namespaced trip is identified in the unified source package",()=>{
+ const t={id:"18860_20251214",number:"18860",type:"U",origin:"Sintra",destination:"Rossio",departure:"11:00:00",arrival:"11:40:00"};
+ const live=pos(CP_AGENCY,"[N18KL]18860","[76XA2][N18KL]18860_20251214");
+ const f=buildUnifiedFeed({now,cpDay:{date:day,trains:[t]},positionsPayload:{data:[live]}});
+ assert.equal(f.vehicles[0].trainNumber,"18860");
+ assert.equal(f.vehicles[0].serviceType,"U");
+ assert.equal(f.vehicles[0].position.isInterpolated,false);
+ assert.equal(f.vehicles[0].journey.origin,"Sintra");
+});
