@@ -58,3 +58,7 @@ Ver [docs/PACOTE-FONTES.md](docs/PACOTE-FONTES.md). O GitHub Actions agora dispo
 ## 2.0.3-beta.1 — aplicação do laboratório unificado
 
 A APK passa a executar o motor `buildUnifiedFeed` em cada recolha TML, cruzando as posições reais com o GTFS da CP importado na compilação. Apresenta CP identificados, CP por identificar, Fertagus e número de circulações programadas. O diagnóstico ETA/alertas incluído na compilação é marcado como **histórico** e nunca usado como posição ao vivo. Não foi alterada a Trains original. A API Cloudflare experimental está incluída no repositório mas ainda não foi publicada.
+
+## 2.0.4-beta.1 — consulta CP nacional (LAB)
+
+Adiciona à APK uma consulta manual por número de comboio e data aos dados operacionais da CP: estado, atraso indicado, última estação, paragens, ETA e ETD, quando fornecidos. O acesso é efetuado por pedido explícito, com transporte HTTP nativo no Android e configuração pública do próprio website CP mantida apenas em memória. Não exporta nem regista credenciais. **Esta informação não cria posições GPS** e poderá falhar em caso de restrições ou alterações da CP. A Trains original continua inalterada. A utilização permanente/republicação requer validação das condições de acesso da CP.

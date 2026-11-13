@@ -3,7 +3,8 @@ import "leaflet/dist/leaflet.css";
 import "./style.css";
 import {CP_AGENCY,FT_AGENCY,TML_URL,FT_FALLBACK_URL,normalizePositions,asRows} from "./live-positions.js";
 import {buildUnifiedFeed} from "./unified-feed.js";
-import {fetchTmlJson,transportLabel} from "./native-http.js";
+import {fetchTmlJson,fetchRemoteJson,transportLabel} from "./native-http.js";
+import {lookupCpOperational} from "./cp-operational.js";
 
 const BASE = import.meta.env.BASE_URL;
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
@@ -12,7 +13,7 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.3-beta.1 · aplicação de ensaio</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.4-beta.1 · consulta operacional CP</small></div>
 </header>
 <div class="sourceNote"><strong>CP GTFS + posições TML</strong><span>Marcadores: coordenadas reportadas recentemente, nunca horários interpolados. Identificamos o número CP apenas quando corresponde a uma circulação única no GTFS. ETA e alertas ainda são diagnósticos, não informação operacional confirmada.</span></div>
 <div class="controls">
@@ -22,6 +23,14 @@ el.innerHTML = `
 </div>
 <div class="types" id="types"></div>
 <div class="stats"><span id="count">A carregar horários CP…</span><span id="freshness"></span><span id="gpsStatus" aria-live="polite">TML: a consultar posições…</span></div>
+<section class="cpNationalLab" aria-label="Consulta operacional nacional CP">
+ <div class="cpLabHead"><div><h2>CP nacional — estado de circulação</h2><p>Consulta direta por número de comboio. Paragens, atrasos e estado operacional; <strong>não são coordenadas GPS</strong>.</p></div><span class="operationalBadge">LAB • SEM GPS</span></div>
+ <div class="cpLookupLine">
+  <label for="cpNumber">N.º comboio<input id="cpNumber" inputmode="numeric" value="26450" maxlength="6" placeholder="26450"/></label>
+  <button id="cpLookup" type="button">Consultar CP diretamente</button>
+ </div>
+ <div id="cpResult" class="cpResult" aria-live="polite">A consulta só é executada quando carregas no botão; não afeta o mapa GPS.</div>
+</section>
 <section class="labAudit" aria-label="Diagnóstico de fontes">
  <div class="labAuditMetrics"><div><small>CP localizados</small><b id="cpLive">—</b></div><div><small>CP identificados</small><b id="cpMatched">—</b></div><div><small>Fertagus</small><b id="ftLive">—</b></div><div><small>GTFS CP</small><b id="scheduled">—</b></div></div>
  <p id="auditText">A aguardar diagnóstico de fontes…</p>
@@ -34,7 +43,7 @@ el.innerHTML = `
 <footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. Coordenadas TML reportadas pelos operadores, com validade máxima de 3 minutos; GTFS CP = horários programados. Sem confirmação de atrasos, supressões ou cobertura nacional. Não utilizar para segurança da exploração.</footer>
 `;
 
-const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit"].map(id=>[id,document.getElementById(id)]));
+const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult"].map(id=>[id,document.getElementById(id)]));
 let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,ftProxyUsed=false;
 const map=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
@@ -125,6 +134,35 @@ function refreshUnified(){
  renderGps();
  if(!didFocusGps&&gpsVehicles.length){didFocusGps=true;focusGpsMarkers()}
 }
+async function queryCpNational(){
+ const number=dom.cpNumber.value.trim(),date=dom.day.value;
+ dom.cpLookup.disabled=true;
+ dom.cpResult.textContent="A consultar a CP para o comboio "+number+"…";
+ try{
+  const r=await lookupCpOperational({number,date,transport:fetchRemoteJson});
+  const delay=r.delayMinutes===null?"sem indicação de atraso":(r.delayMinutes+" min reportados");
+  const stops=r.stops.slice(0,60).map(s=>
+   '<div class="cpStop"><span>'+safeText(s.station)+'</span><span>'+
+   safeText([s.scheduledArrival||s.scheduledDeparture||"—",
+    s.eta?"ETA "+s.eta:null,s.etd?"ETD "+s.etd:null].filter(Boolean).join(" · "))+
+   '</span></div>').join("");
+  dom.cpResult.innerHTML='<div class="cpStatus"><strong>'+
+   safeText(r.type+" "+r.number)+'</strong><span>'+safeText(r.status)+
+   '</span><span>Atraso CP: '+safeText(delay)+'</span></div>'+
+   '<p>Origem: CP · consultado às '+safeText(new Date(r.obtainedAt).toLocaleTimeString("pt-PT"))+
+   ' · última estação indicada: '+safeText(r.lastReportedStation||"não indicada")+'</p>'+
+   (r.hasDisruptions===true?'<p class="cpWarning">A CP sinaliza perturbações.</p>':"")+
+   r.messages.map(m=>'<p class="cpWarning">'+safeText(m.text)+'</p>').join("")+
+   '<details><summary>Ver '+r.stops.length+' paragens devolvidas pela CP</summary>'+
+   stops+'</details><p class="cpNoGps">Sem GPS do veículo. Nenhum marcador é criado com estes dados.</p>';
+ }catch(e){
+  const message=String(e?.message||e).replace(/https?:\/\/[^ ]+/g,"[URL]");
+  dom.cpResult.textContent="CP operacional indisponível: "+message+
+   ". A TML e os horários GTFS continuam independentes desta consulta.";
+ }finally{dom.cpLookup.disabled=false}
+}
+dom.cpLookup.onclick=queryCpNational;
+
 async function loadBuildAudit(){
  try{
   const r=await fetch(BASE+"data/unified/diagnostics.json",{cache:"no-store"});

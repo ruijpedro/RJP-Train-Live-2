@@ -4,12 +4,13 @@
 import {Capacitor,CapacitorHttp} from "@capacitor/core";
 
 export const transportLabel=()=>Capacitor.isNativePlatform()?"Android nativo":"Web";
-export async function fetchTmlJson(url,timeoutMs=15000){
+export async function fetchRemoteJson(url,{timeoutMs=15000,headers={}}={}){
+ const outgoing={Accept:"application/json",...headers};
  if(Capacitor.isNativePlatform()){
   let result;
   try{
    result=await CapacitorHttp.get({
-    url,headers:{"Accept":"application/json"},
+    url,headers:outgoing,
     connectTimeout:timeoutMs,readTimeout:timeoutMs,
    });
   }catch(e){throw Error("Android HTTP: "+String(e?.message||e))}
@@ -23,9 +24,12 @@ export async function fetchTmlJson(url,timeoutMs=15000){
  }
  const controller=new AbortController(),t=setTimeout(()=>controller.abort(),timeoutMs);
  try{
-  const r=await fetch(url,{headers:{Accept:"application/json"},cache:"no-store",signal:controller.signal});
+  const r=await fetch(url,{headers:outgoing,cache:"no-store",signal:controller.signal});
   if(!r.ok)throw Error("Web HTTP "+r.status);
   return await r.json();
  }catch(e){throw Error("Web: "+String(e?.message||e))}
  finally{clearTimeout(t)}
 }
+
+// Backward-compatible TML transport for existing GPS refresh.
+export const fetchTmlJson=(url,timeoutMs=15000)=>fetchRemoteJson(url,{timeoutMs});

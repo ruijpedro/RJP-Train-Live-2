@@ -16,3 +16,24 @@
 .legendLab{font-size:11px;color:#94bbcd;margin:-4px 0 12px}
 .gpsRow .trainInfo small{white-space:normal}
 @media(max-width:800px){.labAudit{padding:9px}.labAuditMetrics{grid-template-columns:repeat(2,minmax(0,1fr))}.labAuditMetrics b{font-size:17px}}
+
+/* CP nationwide on-demand operational evidence, deliberately separate from GPS map */
+.cpNationalLab{padding:12px 16px;background:#0e2437;border-bottom:1px solid #2c546b}
+.cpLabHead{display:flex;justify-content:space-between;align-items:start;gap:14px}
+.cpNationalLab h2{margin:0 0 4px;font-size:16px;color:#b2e9ff}
+.cpNationalLab p{margin:4px 0 8px;font-size:12px;color:#b2c9dd}
+.operationalBadge{border:1px solid #a8c0c4;color:#d9f6f4;border-radius:14px;padding:5px 10px;font-weight:bold;font-size:10px;white-space:nowrap}
+.cpLookupLine{display:flex;gap:10px;align-items:end}
+.cpLookupLine label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:#b2d1e0}
+.cpLookupLine input{width:132px;padding:9px 12px;background:#081828;border:1px solid #4a6c80;border-radius:8px;color:white;font-size:14px}
+.cpLookupLine button{padding:10px 14px;background:#1c728d;border:1px solid #5fd3e7;border-radius:8px;color:white;font-weight:bold}
+.cpLookupLine button:disabled{opacity:.5}
+.cpResult{padding:10px;margin-top:9px;background:#0b1c2a;border:1px solid #345269;border-radius:10px;font-size:12px;color:#bcd4e4}
+.cpStatus{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.cpStatus strong{color:#8ff1e8;font-size:16px}
+.cpNoGps{font-weight:bold;color:#edcda6!important}
+.cpWarning{color:#ffcf92!important}
+.cpStop{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid #294c63}
+.cpStop span:last-child{text-align:right;color:#8ae2fa}
+.cpResult summary{cursor:pointer;padding:9px 0;color:#a1d7f9;font-weight:bold}
+@media(max-width:800px){.cpNationalLab{padding:9px}.cpLabHead{flex-wrap:wrap}.cpLookupLine{flex-wrap:wrap}.cpLookupLine button{flex:1}}

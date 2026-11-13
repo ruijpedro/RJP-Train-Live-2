@@ -61,3 +61,7 @@ Este Worker não consulta o Comboios Live/Rui Costa, não modifica a Trains orig
 ## Diagnóstico de cobertura nacional CP / IP
 
 A TML publica sobretudo comboios CP da região de Lisboa. A sonda \`scripts/probe-national.mjs\` testa, com baixa frequência, uma interface pública de informação operacional da IP para R 26450 (Linha do Oeste) e IC 530, e verifica a disponibilidade da configuração pública do site da CP sem revelar quaisquer chaves. Campos de paragens, atrasos, supressões e passagem **não comprovam GPS**. As respostas não são convertidas em coordenadas no mapa.
+
+## Consulta operacional nacional da CP na APK (2.0.4-beta.1)
+
+Através do botão «Consultar CP diretamente», o laboratório consulta um comboio de cada vez e apresenta o estado de circulação, atraso, última estação indicada e horários por paragem conforme o retorno da CP. A ligação usa a configuração publicada por www.cp.pt exclusivamente em memória, apenas para investigação; esta interface não é uma API oficialmente aberta para reutilização sem condições. Não se recolhem nem geram coordenadas GPS do estado operacional. Uma resposta de erro 500/401/403 é apresentada como indisponibilidade, sem aproximação da localização. Antes de aplicar à Trains original, confirmar autorização/termos e continuidade do serviço.
