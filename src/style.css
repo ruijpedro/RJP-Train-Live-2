@@ -48,3 +48,16 @@
 .trainLookup:hover{background:#136474}
 .loadMore{width:100%;border:1px solid #4ca5e7;border-radius:10px;background:#153d60;color:#d2f0ff;padding:14px;margin:10px 0;font-size:13px;font-weight:700;cursor:pointer}
 @media(max-width:800px){.trainLookup{padding:6px 8px;max-width:88px;white-space:normal;line-height:1.3}.trainMain{gap:6px;padding:8px 6px}.scheduledRow .hours{white-space:normal;max-width:100px}}
+
+/* Coverage by CP service: scheduled services, actual TML coordinates and
+   individually queried operational data must remain visually distinct. */
+.labAuditMetrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+.coverageTypes{margin-top:11px;overflow-x:auto;border:1px solid #2b4d62;border-radius:9px}
+.coverageTypes table{border-collapse:collapse;width:100%;font-size:12px;min-width:420px}
+.coverageTypes th,.coverageTypes td{border-bottom:1px solid #23485c;padding:7px 8px;text-align:right;white-space:nowrap}
+.coverageTypes th:first-child{text-align:left}
+.coverageTypes thead{background:#1a3b50;color:#aed4e9}
+.coverageTypes tbody tr:nth-child(even){background:#112c40}
+.coverageTypes tfoot{background:#21465a;color:#e2faff;font-weight:bold}
+.coverageNote{line-height:1.5;font-size:11px!important}
+@media(max-width:800px){.labAuditMetrics{grid-template-columns:repeat(2,minmax(0,1fr))}}

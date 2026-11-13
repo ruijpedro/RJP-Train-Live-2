@@ -6,6 +6,7 @@ import {buildUnifiedFeed} from "./unified-feed.js";
 import {fetchTmlJson,fetchRemoteJson,transportLabel} from "./native-http.js";
 import {lookupCpOperational} from "./cp-operational.js";
 import {filterCatalogue,pageCatalogue,PAGE_SIZE,cpLookupNumber} from "./train-catalog.js";
+import {coverageAudit} from "./coverage-audit.js";
 
 const BASE = import.meta.env.BASE_URL;
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
@@ -14,7 +15,7 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.5-beta.1 · catálogo nacional completo</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.6-beta.1 · auditoria de cobertura</small></div>
 </header>
 <div class="sourceNote"><strong>CP nacional + GPS TML</strong><span>Catálogo nacional: todas as circulações programadas da CP no GTFS importado. Estado operacional: consulta individual à CP. GPS no mapa: apenas coordenadas recentes publicadas pela TML — não há GPS nacional completo.</span></div>
 <div class="controls">
@@ -33,8 +34,8 @@ el.innerHTML = `
  <div id="cpResult" class="cpResult" aria-live="polite">A consulta só é executada quando carregas no botão; não afeta o mapa GPS.</div>
 </section>
 <section class="labAudit" aria-label="Diagnóstico de fontes">
- <div class="labAuditMetrics"><div><small>CP localizados</small><b id="cpLive">—</b></div><div><small>CP identificados</small><b id="cpMatched">—</b></div><div><small>Fertagus</small><b id="ftLive">—</b></div><div><small>GTFS CP</small><b id="scheduled">—</b></div></div>
- <p id="auditText">A aguardar diagnóstico de fontes…</p>
+ <div class="labAuditMetrics"><div><small>CP com posição TML</small><b id="cpLive">—</b></div><div><small>CP identificados</small><b id="cpMatched">—</b></div><div><small>Fertagus com posição</small><b id="ftLive">—</b></div><div><small>CP programados (GTFS)</small><b id="scheduled">—</b></div><div><small>Respostas CP nesta sessão</small><b id="cpAnswered">0</b></div><div><small>Com indicadores CP</small><b id="cpEvidence">0</b></div></div>
+ <p id="auditText">A aguardar diagnóstico de fontes…</p><div id="coverageTypes" class="coverageTypes" aria-label="Cobertura por tipo de comboio"></div><p id="coverageNote" class="coverageNote">GTFS ≠ circulação confirmada; indicadores CP ≠ localização GPS.</p>
  <p id="buildAudit">Registo da compilação: a carregar…</p>
 </section>
 <div class="workspace">
@@ -44,8 +45,8 @@ el.innerHTML = `
 <footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. Coordenadas TML reportadas pelos operadores, com validade máxima de 3 minutos; GTFS CP = horários programados. Sem confirmação de atrasos, supressões ou cobertura nacional. Não utilizar para segurança da exploração.</footer>
 `;
 
-const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading"].map(id=>[id,document.getElementById(id)]));
-let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,ftProxyUsed=false,listLimit=PAGE_SIZE;
+const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote"].map(id=>[id,document.getElementById(id)]));
+let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null;
 const map=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",{maxZoom:19,opacity:.88,attribution:"OpenRailwayMap"}).addTo(map);
@@ -108,6 +109,33 @@ function renderGps(){
  });
 }
 
+
+function renderCoverage(){
+ const day=data?.date??null;
+ const report=coverageAudit({
+  date:day,trains:data?.trains??[],vehicles:gpsVehicles,
+  queries:[...operationalQueries.values()]
+ });
+ dom.cpAnswered.textContent=report.cpAnswered;
+ dom.cpEvidence.textContent=report.cpIndicators;
+ const showTypes=report.byType.filter(row=>row.scheduled||row.withPosition||row.cpAnswered);
+ dom.coverageTypes.innerHTML='<table><thead><tr>'+
+   '<th scope="col">Tipo</th><th scope="col">GTFS</th>'+
+   '<th scope="col">Posição TML</th><th scope="col">Respostas CP</th>'+
+   '<th scope="col">Indicadores CP</th></tr></thead><tbody>'+
+   showTypes.map(r=>'<tr><th scope="row">'+safeText(r.type)+'</th>'+
+    '<td>'+r.scheduled+'</td><td>'+r.withPosition+'</td>'+
+    '<td>'+r.cpAnswered+'</td><td>'+r.withIndicators+'</td></tr>').join("")+
+   '</tbody><tfoot><tr><th>Total CP</th><td>'+report.scheduled+'</td>'+
+   '<td>'+report.cpPositions+'</td><td>'+report.cpAnswered+'</td>'+
+   '<td>'+report.cpIndicators+'</td></tr></tfoot></table>';
+ dom.coverageNote.textContent=
+  'GTFS = programados, não circulação confirmada · TML = coordenadas recentes (cobertura parcial) · '+
+  'CP = '+report.cpQueried+' comboios consultados nesta sessão ('+report.cpAnswered+
+  ' respostas, '+report.cpErrors+' falhas) · '+report.cpIndicators+
+  ' respostas com indicadores, sem comprovação GPS. Não foi consultada automaticamente toda a rede.';
+}
+
 function refreshUnified(){
  const snapshot=buildUnifiedFeed({
   cpDay:data,positionsPayload:{data:latestTmlRows},now:Date.now(),
@@ -126,6 +154,7 @@ function refreshUnified(){
  dom.cpMatched.textContent=c.cpMatchedToGtfs+" / "+c.cpFreshPositions;
  dom.ftLive.textContent=c.ftFreshPositions;
  dom.scheduled.textContent=c.cpScheduledToday;
+ renderCoverage();
  const source=ftProxyUsed?" · Fertagus via proxy TML":"";
  const problem=lastTmlError?" · Erro TML: "+lastTmlError:"";
  dom.gpsStatus.textContent="TML: CP "+c.cpFreshPositions+" ("+c.cpMatchedToGtfs+" identificados) · FT "+c.ftFreshPositions+" · "+transportLabel()+source+problem;
@@ -141,6 +170,9 @@ async function queryCpNational(){
  dom.cpResult.textContent="A consultar a CP para o comboio "+number+"…";
  try{
   const r=await lookupCpOperational({number,date,transport:fetchRemoteJson});
+  if(date!==dom.day.value){dom.cpResult.textContent="Data alterada; resposta anterior não foi contabilizada.";return;}
+  operationalQueries.set(number,{date,number,success:true,result:r});
+  renderCoverage();
   const delay=r.delayMinutes===null?"sem indicação de atraso":(r.delayMinutes+" min reportados");
   const stops=r.stops.slice(0,60).map(s=>
    '<div class="cpStop"><span>'+safeText(s.station)+'</span><span>'+
@@ -157,6 +189,10 @@ async function queryCpNational(){
    '<details><summary>Ver '+r.stops.length+' paragens devolvidas pela CP</summary>'+
    stops+'</details><p class="cpNoGps">Sem GPS do veículo. Nenhum marcador é criado com estes dados.</p>';
  }catch(e){
+  if(date===dom.day.value&&/^\d{1,6}$/.test(number)){
+   operationalQueries.set(number,{date,number,success:false});
+   renderCoverage();
+  }
   const message=String(e?.message||e).replace(/https?:\/\/[^ ]+/g,"[URL]");
   dom.cpResult.textContent="CP operacional indisponível: "+message+
    ". A TML e os horários GTFS continuam independentes desta consulta.";
@@ -274,6 +310,7 @@ async function loadDay(date){
  try{
   data=await fetchJson(date+".json");
   if(data.realtime!==false||data.gps!==false)throw Error("Tipo de dados inesperado");
+  if(coverageDate!==data.date){operationalQueries.clear();coverageDate=data.date;}
   dom.freshness.textContent="GTFS importado: "+new Date(data.generatedAt).toLocaleString("pt-PT");
   renderStations();renderTrains();refreshUnified();map.invalidateSize();
  }catch(e){setMessage("Horários indisponíveis: "+e.message);dom.trains.innerHTML="<p class='empty'>A importação GTFS tem de terminar com sucesso no GitHub Actions.</p>";}

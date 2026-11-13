@@ -69,3 +69,7 @@ Através do botão «Consultar CP diretamente», o laboratório consulta um comb
 ## Catálogo nacional completo (2.0.5-beta.1)
 
 A APK permite encontrar as 1.341 circulações programadas da CP que o GTFS registou no exemplo de 13/11/2026, sem o limite de 100 resultados. Número, linha, origem, destino e paragens são pesquisáveis; a lista cresce em blocos de 80 para desempenho móvel. É possível consultar a API da CP para um comboio selecionado, sem varrer automaticamente todos os serviços. A TML continua a ser a única fonte ativa de coordenadas reais na app; a ausência de GPS permanece explícita. O total varia por data e atualizações do GTFS.
+
+## Comparação das três classes de informação (2.0.6-beta.1)
+
+Na APK, o painel de auditoria apresenta GTFS programado, TML com coordenadas atuais e respostas da API oficial de informação ao passageiro da CP obtidas **por consultas explícitas nesta sessão**. Diferencia respostas simples de horários das respostas que incluam atraso, ETA/ETD, última estação, estado, avisos ou perturbações. Um indicador operacional não equivale a uma passagem confirmada nem a uma localização GPS. A tabela discrimina U, R, IR, IC, AP, SUD e CP. Sem sonda nacional autorizada, a contagem de respostas CP não representa o número total de comboios com dados nacionais disponíveis.
