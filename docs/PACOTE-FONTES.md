@@ -73,3 +73,7 @@ A APK permite encontrar as 1.341 circulações programadas da CP que o GTFS regi
 ## Comparação das três classes de informação (2.0.6-beta.1)
 
 Na APK, o painel de auditoria apresenta GTFS programado, TML com coordenadas atuais e respostas da API oficial de informação ao passageiro da CP obtidas **por consultas explícitas nesta sessão**. Diferencia respostas simples de horários das respostas que incluam atraso, ETA/ETD, última estação, estado, avisos ou perturbações. Um indicador operacional não equivale a uma passagem confirmada nem a uma localização GPS. A tabela discrimina U, R, IR, IC, AP, SUD e CP. Sem sonda nacional autorizada, a contagem de respostas CP não representa o número total de comboios com dados nacionais disponíveis.
+
+## Estado GPS nos links (2.0.7-beta.1)
+
+Os links de comboios CP exibem GPS disponível apenas com coordenadas TML publicadas com idade máxima de 3 minutos e associação verificável ao número/viagem do GTFS da data. Não receber posição não implica que o veículo não tenha equipamento GPS. Erros na fonte são etiquetados «GPS não verificado», não «sem sinal»; datas diferentes de hoje não herdam posições de hoje. A consulta operacional CP pode ser efetuada independentemente do sinal, e nunca cria pontos de GPS.

@@ -61,3 +61,17 @@
 .coverageTypes tfoot{background:#21465a;color:#e2faff;font-weight:bold}
 .coverageNote{line-height:1.5;font-size:11px!important}
 @media(max-width:800px){.labAuditMetrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Position availability is per specific CP service, not an assertion about
+   a physical GNSS receiver. Badge is refreshed every TML poll. */
+.gpsChip{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:4px 7px;margin-top:4px;
+ border:1px solid #50677b;border-radius:99px;background:#213245;color:#d0d9e0;
+ font-weight:750;font-size:10px;line-height:1.3;white-space:normal}
+.gpsChip.available{color:#d8fff3;background:#135046;border-color:#288872}
+.gpsChip.not-received{color:#f4d7a7;background:#4a3522;border-color:#876140}
+.gpsChip.checking,.gpsChip.unknown,.gpsChip.not-current{color:#c0d3e5;background:#283d4c;border-color:#526e84}
+.detailsGps{margin:7px 0}
+.scheduledRow .trainInfo{display:flex;flex-direction:column;align-items:flex-start}
+.scheduledRow .trainInfo [data-gps-chip]{display:block}
+.gpsRow .trainInfo .gpsChip{margin-top:5px}
+@media(max-width:800px){.gpsChip{font-size:9px;padding:4px 6px}}

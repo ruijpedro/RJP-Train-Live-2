@@ -7,6 +7,7 @@ import {fetchTmlJson,fetchRemoteJson,transportLabel} from "./native-http.js";
 import {lookupCpOperational} from "./cp-operational.js";
 import {filterCatalogue,pageCatalogue,PAGE_SIZE,cpLookupNumber} from "./train-catalog.js";
 import {coverageAudit} from "./coverage-audit.js";
+import {gpsIndicator,GPS_MAX_AGE_MS} from "./gps-indicator.js";
 
 const BASE = import.meta.env.BASE_URL;
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
@@ -15,9 +16,9 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.6-beta.1 · auditoria de cobertura</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.7-beta.1 · sinal GPS por comboio</small></div>
 </header>
-<div class="sourceNote"><strong>CP nacional + GPS TML</strong><span>Catálogo nacional: todas as circulações programadas da CP no GTFS importado. Estado operacional: consulta individual à CP. GPS no mapa: apenas coordenadas recentes publicadas pela TML — não há GPS nacional completo.</span></div>
+<div class="sourceNote"><strong>CP nacional + GPS TML</strong><span>Cada comboio tem indicação de GPS: disponível (posição recente TML) ou sem GPS recebido. A ausência de coordenadas não significa que o veículo não tenha GPS. Só são desenhadas posições reportadas; os horários GTFS e os dados operacionais CP não geram marcadores.</span></div>
 <div class="controls">
  <label><span>Data</span><select id="day"><option>A carregar…</option></select></label>
  <label class="searchBox"><span>Pesquisar comboio ou estação</span><input id="q" placeholder="Número, origem, destino ou paragem" autocomplete="off"/></label>
@@ -40,13 +41,13 @@ el.innerHTML = `
 </section>
 <div class="workspace">
  <div id="map" aria-label="Mapa de estações CP"></div>
- <section class="results"><h2>Posições reais reportadas pela TML</h2><p class="legendLab">Fonte + hora de posição · só aparece o número do comboio quando validado no GTFS da CP</p><div id="liveTrains" class="gpsResults"></div><h2 id="catalogHeading">Catálogo nacional CP — serviços programados</h2><p class="legendLab">Pesquisa todos os comboios do GTFS da data escolhida. Usa «Consultar CP» para pedir o estado operacional de cada circulação; o GTFS não comprova a circulação nem uma posição GPS.</p><div id="catalogCount" class="catalogCount">A carregar catálogo…</div><div id="trains"></div></section>
+ <section class="results"><h2>Posições reais reportadas pela TML</h2><p class="legendLab">Fonte + hora de posição · só aparece o número do comboio quando validado no GTFS da CP</p><div id="liveTrains" class="gpsResults"></div><h2 id="catalogHeading">Catálogo nacional CP — serviços programados</h2><p class="legendLab">Pesquisa nacional no GTFS. Cada comboio indica «GPS disponível» ou «Sem GPS recebido». Um horário sem GPS continua consultável na CP; nunca colocamos uma posição artificial.</p><div id="catalogCount" class="catalogCount">A carregar catálogo…</div><div id="trains"></div></section>
 </div>
 <footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. Coordenadas TML reportadas pelos operadores, com validade máxima de 3 minutos; GTFS CP = horários programados. Sem confirmação de atrasos, supressões ou cobertura nacional. Não utilizar para segurança da exploração.</footer>
 `;
 
 const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote"].map(id=>[id,document.getElementById(id)]));
-let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null;
+let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null;
 const map=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",{maxZoom:19,opacity:.88,attribution:"OpenRailwayMap"}).addTo(map);
@@ -55,6 +56,22 @@ routeLayer.addTo(map);
 gpsMarkers.addTo(map);
 
 function safeText(v){return String(v??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));}
+function statusGps(number,tripId=null,date=data?.date){
+ return gpsIndicator({number,tripId,date,vehicles:gpsVehicles,checked:tmlChecked,
+  sourceError:!!lastTmlError,now:Date.now(),maxAgeMs:GPS_MAX_AGE_MS});
+}
+function gpsChip(s){
+ return '<span class="gpsChip '+safeText(s.state)+'" title="'+safeText(s.detail)+'">'+
+  (s.state==="available"?"● ":"○ ")+safeText(s.label)+'</span>';
+}
+function refreshGpsChips(){
+ dom.trains.querySelectorAll("[data-gps-chip]").forEach(el=>{
+  const status=statusGps(el.dataset.trainNumber,el.dataset.tripId||null);
+  el.innerHTML=gpsChip(status);
+ });
+ const details=document.querySelector("[data-gps-detail-number]");
+ if(details){details.innerHTML=gpsChip(statusGps(details.dataset.gpsDetailNumber,details.dataset.gpsDetailTrip||null));}
+}
 function sameLocation(p){return Array.isArray(p)&&p.length===2&&p.every(Number.isFinite);}
 function setMessage(msg){dom.count.textContent=msg;}
 function renderTypes(){
@@ -89,14 +106,15 @@ function renderGps(){
  dom.liveTrains.innerHTML=visible.length?visible.map((v,i)=>{
   const title=v.trainNumber?v.type+" "+v.trainNumber:v.operator+" · veículo "+v.vehicleId;
   const journey=v.origin&&v.destination?v.origin+" → "+v.destination:"Percurso CP ainda não associado";
+  const signal={state:"available",label:"GPS disponível",detail:"Posição recente publicada pela TML."};
   return '<button class="train gpsRow" data-gps="'+i+'"><span class="pill" style="--type-color:'+(COLORS[v.type]||COLORS.CP)+'">'+safeText(v.type)+'</span>'+
-    '<span class="trainInfo"><strong>'+safeText(title)+'</strong><small>'+safeText(journey)+'</small><small>Origem: TML · '+safeText(v.matchMethod)+'</small></span>'+
+    '<span class="trainInfo"><strong>'+safeText(title)+'</strong><small>'+safeText(journey)+'</small>'+gpsChip(signal)+'<small>Origem: TML · '+safeText(v.matchMethod)+'</small></span>'+
     '<span class="hours"><b>POSIÇÃO</b><small>'+new Date(v.timestamp).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"})+'</small></span></button>';
  }).join(""):'<p class="empty">Sem posições recentes para estes filtros. Os horários GTFS estão disponíveis abaixo; não são localizações reais.</p>';
  for(const v of visible){
   const marker=L.marker([v.latitude,v.longitude],{icon:gpsIcon(v.type)}).addTo(gpsMarkers);
   marker.bindTooltip(safeText((v.trainNumber?v.type+" "+v.trainNumber:v.operator+" "+v.vehicleId)+" · TML"));
-  marker.bindPopup('<b>'+safeText(v.trainNumber?v.type+" "+v.trainNumber:v.operator+" "+v.vehicleId)+'</b>'+
+  marker.bindPopup('<b>'+safeText(v.trainNumber?v.type+" "+v.trainNumber:v.operator+" "+v.vehicleId)+'</b><p>'+gpsChip({state:"available",label:"GPS disponível",detail:"Posição recente TML."})+'</p>'+
    '<p>'+safeText(v.origin&&v.destination?v.origin+" → "+v.destination:"Percurso não validado")+'</p>'+
    '<p>Latitude '+v.latitude.toFixed(5)+' · Longitude '+v.longitude.toFixed(5)+'</p>'+
    '<p>Observado: '+new Date(v.timestamp).toLocaleString("pt-PT")+'</p>'+
@@ -147,6 +165,7 @@ function refreshUnified(){
   destination:v.journey?.destination??null,
   matchMethod:v.match?.method??"unmatched",
   latitude:v.position.latitude,longitude:v.position.longitude,
+  gtfsTripId:v.journey?.gtfsTripId??null,
   timestamp:Date.parse(v.position.observedAt)
  }));
  const c=snapshot.coverage;
@@ -155,6 +174,7 @@ function refreshUnified(){
  dom.ftLive.textContent=c.ftFreshPositions;
  dom.scheduled.textContent=c.cpScheduledToday;
  renderCoverage();
+ refreshGpsChips();
  const source=ftProxyUsed?" · Fertagus via proxy TML":"";
  const problem=lastTmlError?" · Erro TML: "+lastTmlError:"";
  dom.gpsStatus.textContent="TML: CP "+c.cpFreshPositions+" ("+c.cpMatchedToGtfs+" identificados) · FT "+c.ftFreshPositions+" · "+transportLabel()+source+problem;
@@ -173,6 +193,8 @@ async function queryCpNational(){
   if(date!==dom.day.value){dom.cpResult.textContent="Data alterada; resposta anterior não foi contabilizada.";return;}
   operationalQueries.set(number,{date,number,success:true,result:r});
   renderCoverage();
+  const signal=statusGps(number);
+  const signalHtml=gpsChip(signal);
   const delay=r.delayMinutes===null?"sem indicação de atraso":(r.delayMinutes+" min reportados");
   const stops=r.stops.slice(0,60).map(s=>
    '<div class="cpStop"><span>'+safeText(s.station)+'</span><span>'+
@@ -181,13 +203,13 @@ async function queryCpNational(){
    '</span></div>').join("");
   dom.cpResult.innerHTML='<div class="cpStatus"><strong>'+
    safeText(r.type+" "+r.number)+'</strong><span>'+safeText(r.status)+
-   '</span><span>Atraso CP: '+safeText(delay)+'</span></div>'+
+   '</span><span>Atraso CP: '+safeText(delay)+'</span>'+signalHtml+'</div>'+
    '<p>Origem: CP · consultado às '+safeText(new Date(r.obtainedAt).toLocaleTimeString("pt-PT"))+
    ' · última estação indicada: '+safeText(r.lastReportedStation||"não indicada")+'</p>'+
    (r.hasDisruptions===true?'<p class="cpWarning">A CP sinaliza perturbações.</p>':"")+
    r.messages.map(m=>'<p class="cpWarning">'+safeText(m.text)+'</p>').join("")+
    '<details><summary>Ver '+r.stops.length+' paragens devolvidas pela CP</summary>'+
-   stops+'</details><p class="cpNoGps">Sem GPS do veículo. Nenhum marcador é criado com estes dados.</p>';
+   stops+'</details><p class="cpNoGps">A resposta operacional da CP não inclui coordenadas neste laboratório. O indicador GPS acima vem apenas da TML; nunca criamos posições a partir do horário.</p>';
  }catch(e){
   if(date===dom.day.value&&/^\d{1,6}$/.test(number)){
    operationalQueries.set(number,{date,number,success:false});
@@ -228,6 +250,7 @@ async function loadGps(){
   }catch(e){ftError=String(e?.message||e);console.warn("Fertagus fallback",e)}
  }
  latestTmlRows=rows;
+ tmlChecked=true;
  lastTmlError=directError?(directError+(ftError?" · FT "+ftError:"")):null;
  refreshUnified();
 }
@@ -253,7 +276,7 @@ function viewTrain(t){
  }else if(points.length===1)map.setView(points[0],12);
  const panel=document.createElement("div");
  panel.className="details";
- panel.innerHTML=`<div><strong>${safeText(t.type)} ${safeText(t.number)}</strong> · ${safeText(t.origin)} → ${safeText(t.destination)}</div><p>Paragens programadas (não há confirmação de passagem em direto)</p>`+
+ panel.innerHTML=`<div><strong>${safeText(t.type)} ${safeText(t.number)}</strong> · ${safeText(t.origin)} → ${safeText(t.destination)}</div><div class="detailsGps" data-gps-detail-number="${safeText(t.number)}" data-gps-detail-trip="${safeText(t.id)}">${gpsChip(statusGps(t.number,t.id))}</div><p>Paragens programadas (não há confirmação de passagem em direto)</p>`+
  (t.stops||[]).map(s=>`<div class="stop"><span>${safeText(s.name)}</span><span>${safeText(s.departure||s.arrival)}</span></div>`).join("");
  const existing=document.querySelector(".details");if(existing)existing.remove();
  document.querySelector(".results").append(panel);
@@ -265,15 +288,14 @@ function renderTrains(){
  dom.count.textContent=matches.length+" circulações programadas de "+data.trains.length+" no dia "+data.date;
  const {visible,more}=pageCatalogue(matches,listLimit);
  dom.catalogCount.textContent="A mostrar "+visible.length+" de "+matches.length+" serviços CP encontrados ("+data.trains.length+" no GTFS nacional).";
- const realNumbers=new Set(gpsVehicles.filter(v=>v.agency===CP_AGENCY&&v.trainNumber).map(v=>String(v.trainNumber)));
  dom.trains.innerHTML=visible.map((t,i)=>{
   const number=cpLookupNumber(t);
-  const actual=realNumbers.has(String(t.number));
+  const status=statusGps(t.number,t.id);
   return '<div class="train scheduledRow">'+
    '<button type="button" class="trainMain" data-index="'+i+'">'+
    '<span class="pill" style="--type-color:'+(COLORS[t.type]||COLORS.CP)+'">'+safeText(t.type)+'</span>'+
-   '<span class="trainInfo"><strong>'+safeText(t.number)+'</strong><small>'+safeText(t.origin)+" → "+safeText(t.destination)+'</small></span>'+
-   '<span class="hours"><b>'+safeText(t.departure)+" → "+safeText(t.arrival)+'</b><small>'+(actual?"GPS TML recebido":"GTFS previsto")+'</small></span></button>'+
+   '<span class="trainInfo"><strong>'+safeText(t.number)+'</strong><small>'+safeText(t.origin)+" → "+safeText(t.destination)+'</small><span data-gps-chip data-train-number="'+safeText(t.number)+'" data-trip-id="'+safeText(t.id)+'">'+gpsChip(status)+'</span></span>'+
+   '<span class="hours"><b>'+safeText(t.departure)+" → "+safeText(t.arrival)+'</b><small>GTFS previsto</small></span></button>'+
    (number?'<button type="button" class="trainLookup" data-cp-index="'+i+'" aria-label="Consultar CP '+safeText(number)+' diretamente">Consultar CP</button>':'')+
    '</div>';
  }).join("");
