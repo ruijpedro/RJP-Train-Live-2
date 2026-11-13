@@ -43,3 +43,17 @@ Os dados do GO Hub seguem, salvo exceção, [CC BY 4.0](https://creativecommons.
 ## Critério de migração para a Trains original
 
 Só após demonstrar correspondência de números CP, frescura e cobertura suficientes para os serviços pretendidos, além de tolerância a falhas, sem perda das funcionalidades e utilizadores existentes. Em caso de fonte indisponível, apresentar indisponibilidade e **nunca** inventar posições.
+
+## API própria experimental — Cloudflare Worker LAB
+
+O pacote inclui \`worker/worker.js\` e \`wrangler.toml\`, completamente separados da Trains original. Ainda **não está publicado**: requer configuração e deploy num Worker novo.
+
+Endpoints previstos:
+- \`/health\` — estado e se os horários CP foram configurados.
+- \`/api/trains/unified\` — posições TML, ETA ferroviário, alertas e GTFS quando disponível, com origem e validade.
+- \`/api/trains/active\` — adaptador de posições reportadas, preparado para teste com a Trains original (sem alterar a app).
+- \`/api/trains/diagnostics\` — cobertura, falhas e associações CP.
+
+Para cruzar as posições com o GTFS oficial em tempo real, é preciso publicar os JSON diários que o workflow gera numa origem HTTPS estável e configurar \`CP_SCHEDULE_BASE_URL\` nesse Worker. **Sem esta variável, as coordenadas aparecem mas a associação do número de comboio pode estar indisponível.** O ZIP de dados é um instantâneo e não pode ser utilizado como localização em tempo real depois de \`expiresAt\`.
+
+Este Worker não consulta o Comboios Live/Rui Costa, não modifica a Trains original e não está aprovado para fins operacionais de segurança ferroviária.

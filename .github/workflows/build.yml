@@ -61,6 +61,8 @@ jobs:
             src/unified-feed.js
             scripts/build-unified.mjs
             docs/PACOTE-FONTES.md
+            worker/worker.js
+            wrangler.toml
           if-no-files-found: error
 
   android:

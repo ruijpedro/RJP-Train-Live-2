@@ -1,0 +1,8 @@
+name = "rjp-train-live-2-lab"
+main = "worker/worker.js"
+compatibility_date = "2026-11-13"
+workers_dev = true
+# OPTIONAL: publish independent CP GTFS daily JSON at an HTTPS base.
+# Do not put a URL here unless the hosting contains <YYYY-MM-DD>.json files.
+# [vars]
+# CP_SCHEDULE_BASE_URL = "https://YOUR-OWN-HOST/data/cp"
