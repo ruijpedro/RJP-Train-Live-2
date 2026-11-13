@@ -38,3 +38,22 @@ test("ETA and alerts never masquerade as GPS or confirmed delay",()=>{
  assert.equal(f.alerts.length,1);
  assert.equal(f.vehicles[0].position.kind,"operator_reported_coordinates");
 });
+
+test("namespaced CP trip id resolves to a unique GTFS train number",()=>{
+ const t={id:"18851_20251101",number:"18851",type:"U",origin:"Sintra",destination:"Lisboa",departure:"10:10:00",arrival:"10:50:00"};
+ const f=buildUnifiedFeed({now,cpDay:{date:day,trains:[t]},positionsPayload:{data:[{
+  ...pos(CP_AGENCY,"[N18KL]18851","[76XA2][N18KL]18851_20251214"),route_short_name:"Sintra"
+ }]}});
+ assert.equal(f.coverage.cpMatchedToGtfs,1);
+ assert.equal(f.vehicles[0].trainNumber,"18851");
+ assert.equal(f.vehicles[0].match.method,"trip-id-number");
+});
+test("duplicate CP GTFS train number remains unmatched",()=>{
+ const t1={...train,id:"26450_20261101"};
+ const t2={...train,id:"26450_20261113"};
+ const f=buildUnifiedFeed({now,cpDay:{date:day,trains:[t1,t2]},positionsPayload:{data:[
+  pos(CP_AGENCY,"[N18KL]26450","[76XA2][N18KL]26450_20251214")
+ ]}});
+ assert.equal(f.coverage.cpMatchedToGtfs,0);
+ assert.equal(f.vehicles[0].trainNumber,null);
+});

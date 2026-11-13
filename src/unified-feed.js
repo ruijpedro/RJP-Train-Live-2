@@ -9,8 +9,8 @@ export const IP_STATIONS_URL="https://servicos.infraestruturasdeportugal.pt/pt-p
 
 const value=v=>String(v??"").trim();
 function numericNumber(v) {
- const s=value(v).toUpperCase();
- // Only explicit, plausible train service identifiers. Never vehicle_id.
+ const s=value(v).toUpperCase().replace(/^(?:\[[^\]]+\])+/, "");
+ // TML trip ids may include [ORG][AGENCY] prefixes; never use vehicle_id as train number.
  const m=s.match(/^(?:(?:SUD|AP|IC|IR|R|U)\s*)?(\d{3,6})(?:_(\d{8}))?$/);
  return m?m[1]:null;
 }
@@ -27,6 +27,8 @@ export function matchCpSchedule(v,schedules){
  if(v.agency!==CP_AGENCY)return {train:null,method:"not-cp"};
  const idx=indexSchedules(schedules);
  const id=value(v.tripId);
+ const unprefixed=id.replace(/^(?:\[[^\]]+\])+/, "");
+ if(unprefixed&&idx.trip.has(unprefixed))return {train:idx.trip.get(unprefixed),method:"exact-gtfs-trip-id"};
  if(id&&idx.trip.has(id))return {train:idx.trip.get(id),method:"exact-trip-id"};
  // A train number is accepted ONLY when it appears in a dedicated service
  // identity field and maps to a unique GTFS service for the same date.

@@ -74,5 +74,5 @@ const report=[
 ].join("\n");
 await writeFile(destination+"/RELATORIO.md",report);
 console.log("RJP UNIFIED PACKAGE",JSON.stringify(unified.coverage));
-for(const [name,src] of Object.entries(unified.sources))console.log(name,src.status);
+for(const [name,src] of Object.entries(unified.sources))console.log(name,src.status,src.error??"");
 if(!positions.payload)console.warn("TML positions missing; snapshot will contain no GPS (never simulated)");
