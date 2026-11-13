@@ -45,3 +45,7 @@ npm run build
 ## Posições GPS TML (beta 2.0.1)
 
 O mapa só apresenta marcadores de comboios quando a TML publica latitude, longitude e carimbo temporal de até 3 minutos. São aceites apenas os operadores CP (`N18KL`) e Fertagus (`7NTB1`). Os horários estáticos da CP nunca originam marcadores. Se a TML não divulgar coordenadas da CP, o mapa apresenta zero comboios CP, sem fabricar posições. O acesso direto TML depende de permissões CORS; existe um recurso ao proxy TML da versão anterior apenas para Fertagus, sem consulta ao Rui Costa. A integração independente de toda a CP ainda depende de acesso a uma fonte de posições comprovadas.
+
+## Android GPS — transporte nativo
+
+A APK usa `CapacitorHttp.get` nativo (sem restrições CORS da WebView) para obter posições publicadas pela TML. O navegador mantém pedidos `fetch` e poderá precisar de proxy próprio. O estado da app informa contagens CP/Fertagus e erros de rede; **Ver todos os GPS** centra os marcadores e limpa os filtros. Esta versão não cria localizações interpoladas a partir dos horários GTFS. Coordenadas publicadas não provam automaticamente o tipo de sensor usado pelo operador.

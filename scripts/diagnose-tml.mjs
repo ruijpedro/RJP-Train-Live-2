@@ -5,6 +5,7 @@ const controller=new AbortController();const timeout=setTimeout(()=>controller.a
 try{
  const r=await fetch(TML_URL,{headers:{Accept:"application/json"},signal:controller.signal});
  console.log("TML HTTP:",r.status);
+ console.log("TML CORS Allow-Origin:",r.headers.get("access-control-allow-origin")||"(absent)");
  if(!r.ok)throw Error("HTTP "+r.status);
  const response=await r.json();
  const rows=Array.isArray(response?.data)?response.data:Array.isArray(response)?response:[];

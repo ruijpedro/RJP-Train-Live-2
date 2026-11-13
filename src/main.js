@@ -1,7 +1,8 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./style.css";
-import {CP_AGENCY,FT_AGENCY,TML_URL,FT_FALLBACK_URL,normalizePositions,fetchJson as fetchRemoteJson} from "./live-positions.js";
+import {CP_AGENCY,FT_AGENCY,TML_URL,FT_FALLBACK_URL,normalizePositions} from "./live-positions.js";
+import {fetchTmlJson,transportLabel} from "./native-http.js";
 
 const BASE = import.meta.env.BASE_URL;
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
@@ -16,7 +17,7 @@ el.innerHTML = `
 <div class="controls">
  <label><span>Data</span><select id="day"><option>A carregar…</option></select></label>
  <label class="searchBox"><span>Pesquisar comboio ou estação</span><input id="q" placeholder="Número, origem, destino ou paragem" autocomplete="off"/></label>
- <button id="reload">Atualizar horários e GPS</button>
+ <button id="reload">Atualizar horários e GPS</button><button id="focusGps" type="button" class="focusBtn">Ver todos os GPS</button>
 </div>
 <div class="types" id="types"></div>
 <div class="stats"><span id="count">A carregar horários CP…</span><span id="freshness"></span><span id="gpsStatus" aria-live="polite">GPS: a consultar TML…</span></div>
@@ -27,8 +28,8 @@ el.innerHTML = `
 <footer><b>RJP Train Live 2.0</b> · Os marcadores de comboios só aparecem com coordenadas recentes da TML. Horários GTFS e linhas de itinerário são esquemáticos, não localizações. Não utilizar para segurança da exploração.</footer>
 `;
 
-const dom = Object.fromEntries(["q","day","types","reload","count","freshness","trains","gpsStatus","liveTrains"].map(id=>[id,document.getElementById(id)]));
-let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[];
+const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains"].map(id=>[id,document.getElementById(id)]));
+let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="";
 const map=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",{maxZoom:19,opacity:.88,attribution:"OpenRailwayMap"}).addTo(map);
@@ -44,6 +45,20 @@ function renderTypes(){
  dom.types.querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=b.dataset.type;renderTypes();renderTrains();renderGps();});
 }
 
+function focusGpsMarkers(){
+ if(!gpsVehicles.length){dom.gpsStatus.textContent=lastGpsStatus+" · sem posições para centrar";return}
+ selected="ALL";
+ dom.q.value="";
+ renderTypes();
+ renderTrains();
+ renderGps();
+ const bounds=L.latLngBounds(gpsVehicles.map(v=>[v.latitude,v.longitude]));
+ if(bounds.isValid()){
+  map.invalidateSize();
+  map.fitBounds(bounds.pad(.15),{maxZoom:11,animate:false});
+ }
+}
+
 function gpsIcon(type){
  const color=COLORS[type]||COLORS.CP;
  return L.divIcon({className:"gpsMarkerIcon",html:'<span class="gpsMarker" style="--color:'+color+'">'+safeText(type)+'</span>',iconSize:[34,34],iconAnchor:[17,17]});
@@ -53,7 +68,7 @@ function renderGps(){
  const q=dom.q.value.trim().toLocaleLowerCase("pt-PT");
  const visible=gpsVehicles.filter(v=>(selected==="ALL"||v.type===selected||(v.agency===CP_AGENCY&&selected==="CP"))&&
   (!q||[v.vehicleId,v.tripId,v.route,v.operator,v.type].some(s=>String(s||"").toLocaleLowerCase("pt-PT").includes(q))));
- dom.liveTrains.innerHTML=visible.length?visible.map((v,i)=>'<button class="train gpsRow" data-gps="'+i+'"><span class="pill" style="--type-color:'+(COLORS[v.type]||COLORS.CP)+'">'+safeText(v.type)+'</span><span class="trainInfo"><strong>'+safeText(v.operator)+" "+safeText(v.vehicleId)+'</strong><small>Viagem '+safeText(v.tripId||"—")+' · '+safeText(v.route||"rota não indicada")+'</small></span><span class="hours"><b>GPS TML</b><small>'+new Date(v.timestamp).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"})+'</small></span></button>').join(""):'<p class="empty">Nenhuma posição GPS recente disponível nesta pesquisa. Os horários da CP continuam acessíveis abaixo.</p>';
+ dom.liveTrains.innerHTML=visible.length?visible.map((v,i)=>'<button class="train gpsRow" data-gps="'+i+'"><span class="pill" style="--type-color:'+(COLORS[v.type]||COLORS.CP)+'">'+safeText(v.type)+'</span><span class="trainInfo"><strong>'+safeText(v.operator)+" "+safeText(v.vehicleId)+'</strong><small>Viagem '+safeText(v.tripId||"—")+' · '+safeText(v.route||"rota não indicada")+'</small></span><span class="hours"><b>GPS TML</b><small>'+new Date(v.timestamp).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"})+'</small></span></button>').join(""):'<p class="empty">Nenhuma posição TML recente corresponde aos filtros. Usa «Ver todos os GPS» para limpar os filtros ou consulta o diagnóstico de ligação acima.</p>';
  for(const v of visible){
   const marker=L.marker([v.latitude,v.longitude],{icon:gpsIcon(v.type)}).addTo(gpsMarkers);
   marker.bindTooltip(safeText(v.operator+" "+v.vehicleId+" · posição publicada pela TML"));
@@ -69,24 +84,27 @@ async function loadGps(){
  dom.gpsStatus.textContent="GPS: a consultar TML…";
  let direct=[],directError=null;
  try{
-  direct=normalizePositions(await fetchRemoteJson(TML_URL));
+  direct=normalizePositions(await fetchTmlJson(TML_URL));
  }catch(e){directError=e?.message||String(e)}
- let ftFallback=[];
+ let ftFallback=[],ftError=null;
  // If TML is inaccessible in the WebView or has no Fertagus positions,
  // reuse the *existing TML proxy only for Fertagus*; never reuse a CP/Rui Costa feed.
  if(!direct.some(v=>v.agency===FT_AGENCY)){
   try{
-   const response=await fetchRemoteJson(FT_FALLBACK_URL);
+   const response=await fetchTmlJson(FT_FALLBACK_URL);
    ftFallback=normalizePositions({positions:response?.positions||[]},{agencyAllowlist:[FT_AGENCY]});
-  }catch(e){console.warn("Fertagus TML fallback unavailable:",e)}
+  }catch(e){ftError=String(e?.message||e);console.warn("Fertagus TML fallback unavailable:",e)}
  }
  const dedup=new Map();
  for(const v of [...direct,...ftFallback])dedup.set(v.key,v);
  gpsVehicles=[...dedup.values()];
  const cp=gpsVehicles.filter(v=>v.agency===CP_AGENCY).length;
  const ft=gpsVehicles.filter(v=>v.agency===FT_AGENCY).length;
- dom.gpsStatus.textContent="Posições TML recentes: CP "+cp+" · Fertagus "+ft+(directError?" · acesso direto TML indisponível":"");
+ const errText=directError ? " · TML: "+directError+(ftError?" · FT proxy: "+ftError:"") : "";
+ dom.gpsStatus.textContent="Posições TML recentes: CP "+cp+" · Fertagus "+ft+" · "+transportLabel()+errText;
+ lastGpsStatus=dom.gpsStatus.textContent;
  renderGps();
+ if(!didFocusGps&&gpsVehicles.length){didFocusGps=true;focusGpsMarkers();}
 }
 
 function renderStations(){
@@ -162,6 +180,7 @@ async function load(){
 dom.q.addEventListener("input",()=>{renderTrains();renderGps()});
 dom.day.addEventListener("change",()=>loadDay(dom.day.value));
 dom.reload.onclick=()=>{load();loadGps()};
+dom.focusGps.onclick=()=>focusGpsMarkers();
 renderTypes();
 load();
 loadGps();
