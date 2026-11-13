@@ -49,3 +49,8 @@ O mapa só apresenta marcadores de comboios quando a TML publica latitude, longi
 ## Android GPS — transporte nativo
 
 A APK usa `CapacitorHttp.get` nativo (sem restrições CORS da WebView) para obter posições publicadas pela TML. O navegador mantém pedidos `fetch` e poderá precisar de proxy próprio. O estado da app informa contagens CP/Fertagus e erros de rede; **Ver todos os GPS** centra os marcadores e limpa os filtros. Esta versão não cria localizações interpoladas a partir dos horários GTFS. Coordenadas publicadas não provam automaticamente o tipo de sensor usado pelo operador.
+
+
+## Pacote unificado de fontes (2.0.2-beta.1)
+
+Ver [docs/PACOTE-FONTES.md](docs/PACOTE-FONTES.md). O GitHub Actions agora disponibiliza o ZIP **RJP-Train-Live-2-Fontes-Unificadas**, com GTFS CP, posições publicadas pela TML, ETA, alertas e diagnósticos, sem alterar a Trains em produção.
