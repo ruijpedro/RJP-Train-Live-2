@@ -11,7 +11,7 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório CP • plataforma ferroviária independente</p></div></div>
- <div class="headRight"><strong>HORÁRIOS CP</strong><small>Versão experimental</small></div>
+ <div class="headRight"><strong>HORÁRIOS CP</strong><small>2.0.1-beta.2 · diagnóstico GPS</small></div>
 </header>
 <div class="sourceNote"><strong>GPS: TML GO Hub</strong><span>Os símbolos no mapa são exclusivamente posições com coordenadas publicadas há menos de 3 minutos. Sem dados GPS não há ícones de comboios. Os horários CP são apresentados apenas na lista.</span></div>
 <div class="controls">
