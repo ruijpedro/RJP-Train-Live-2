@@ -39,6 +39,9 @@ jobs:
       - name: Diagnosticar posições reais CP e Fertagus publicadas pela TML
         continue-on-error: true
         run: node scripts/diagnose-tml.mjs
+      - name: Sondar fontes nacionais CP e IP (sem atribuir GPS)
+        continue-on-error: true
+        run: node scripts/probe-national.mjs
       - name: Gerar pacote unificado CP + TML + ETA + alertas
         run: node scripts/build-unified.mjs
       - name: Instalar dependências, testar GPS e compilar WebApp

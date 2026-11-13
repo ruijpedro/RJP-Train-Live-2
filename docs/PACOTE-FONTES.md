@@ -57,3 +57,7 @@ Endpoints previstos:
 Para cruzar as posições com o GTFS oficial em tempo real, é preciso publicar os JSON diários que o workflow gera numa origem HTTPS estável e configurar \`CP_SCHEDULE_BASE_URL\` nesse Worker. **Sem esta variável, as coordenadas aparecem mas a associação do número de comboio pode estar indisponível.** O ZIP de dados é um instantâneo e não pode ser utilizado como localização em tempo real depois de \`expiresAt\`.
 
 Este Worker não consulta o Comboios Live/Rui Costa, não modifica a Trains original e não está aprovado para fins operacionais de segurança ferroviária.
+
+## Diagnóstico de cobertura nacional CP / IP
+
+A TML publica sobretudo comboios CP da região de Lisboa. A sonda \`scripts/probe-national.mjs\` testa, com baixa frequência, uma interface pública de informação operacional da IP para R 26450 (Linha do Oeste) e IC 530, e verifica a disponibilidade da configuração pública do site da CP sem revelar quaisquer chaves. Campos de paragens, atrasos, supressões e passagem **não comprovam GPS**. As respostas não são convertidas em coordenadas no mapa.
