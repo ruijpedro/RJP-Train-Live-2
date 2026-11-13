@@ -56,7 +56,8 @@ const report=[
  "- CP associados ao GTFS de forma verificável: "+unified.coverage.cpMatchedToGtfs,
  "- CP com coordenadas mas número de comboio ainda por identificar: "+unified.coverage.cpUnmatched,
  "- Fertagus com coordenadas recentes TML: "+unified.coverage.ftFreshPositions+" de "+unified.coverage.ftPositionsPublished+" publicadas",
- "- Registos ETA TML: "+unified.coverage.tmlEtaRecords,
+ "- Registos ETA ferroviários associados: "+unified.coverage.tmlRailEtaRecords+
+   " de "+unified.coverage.tmlEtaPublishedTotal+" estimativas TML de todos os transportes",
  "- Alertas ferroviários TML: "+unified.coverage.railAlerts,
  "",
  "## Integração na Trains original",

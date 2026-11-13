@@ -57,3 +57,16 @@ test("duplicate CP GTFS train number remains unmatched",()=>{
  assert.equal(f.coverage.cpMatchedToGtfs,0);
  assert.equal(f.vehicles[0].trainNumber,null);
 });
+
+test("non-rail ETA never enters combined railway feed",()=>{
+ const payload={data:[
+  {trip_id:train.id,vehicle_id:"unit-17",stop_id:"coimbra",eta_at:now+30000},
+  {trip_id:"bus-trip",vehicle_id:"bus-456",stop_id:"bus-stop",eta_at:now+30000}
+ ]};
+ const f=buildUnifiedFeed({now,cpDay:{date:day,trains:[train]},
+   positionsPayload:{data:[pos(CP_AGENCY,"unit-17",train.id)]},
+   etaPayload:payload});
+ assert.equal(f.coverage.tmlEtaPublishedTotal,2);
+ assert.equal(f.coverage.tmlRailEtaRecords,1);
+ assert.equal(f.vehicles[0].eta.length,1);
+});

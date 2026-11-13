@@ -38,8 +38,16 @@ export function matchCpSchedule(v,schedules){
  }
  return {train:null,method:"unmatched"};
 }
-function normalizeEta(payload,now){
- return asRows(payload).filter(r=>r&&r.trip_id!=null&&r.stop_id!=null).map(r=>{
+function normalizeEta(payload,now,railPositions){
+ const tripIds=new Set(railPositions.map(r=>value(r?.trip_id)).filter(Boolean));
+ const vehicleIds=new Set(railPositions.map(r=>value(r?.vehicle_id)).filter(Boolean));
+ // TML ETA is a global transport feed. Never import bus ETA into a rail package.
+ return asRows(payload).filter(r=>{
+  if(!r||r.trip_id==null||r.stop_id==null)return false;
+  const trip=value(r.trip_id),vehicle=value(r.vehicle_id);
+  if(trip&&tripIds.has(trip))return !vehicle||vehicleIds.has(vehicle);
+  return !!vehicle&&vehicleIds.has(vehicle)&&(!trip||tripIds.has(trip));
+ }).map(r=>{
   const at=Number(r.eta_at);
   return {tripId:value(r.trip_id),vehicleId:value(r.vehicle_id),stopId:value(r.stop_id),
    stopName:value(r.stop_name),stopSequence:Number.isFinite(Number(r.stop_sequence))?Number(r.stop_sequence):null,
@@ -65,7 +73,7 @@ export function buildUnifiedFeed({
  const visible=normalizePositions(positionsPayload,{now,maxAgeMs:180000});
  const cpRows=raw.filter(r=>value(r?.agency_id)===CP_AGENCY);
  const ftRows=raw.filter(r=>value(r?.agency_id)===FT_AGENCY);
- const eta=normalizeEta(etaPayload,now);
+ const eta=normalizeEta(etaPayload,now,[...cpRows,...ftRows]);
  const alerts=normalizeAlerts(alertsPayload);
  const etaByTrip=new Map(),etaByVehicle=new Map();
  for(const e of eta){
@@ -115,6 +123,7 @@ export function buildUnifiedFeed({
    cpPositionsPublished:cpRows.length,ftPositionsPublished:ftRows.length,
    cpFreshPositions:cpValid.length,ftFreshPositions:ftValid.length,
    cpMatchedToGtfs:cpLinked.length,cpUnmatched:cpValid.length-cpLinked.length,
+   tmlEtaPublishedTotal:asRows(etaPayload).length,tmlRailEtaRecords:eta.length,
    tmlEtaRecords:eta.length,railAlerts:alerts.length,
    cpPositionIsNationalCoverage:false
   },
