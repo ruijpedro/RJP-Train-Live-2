@@ -15,6 +15,15 @@ try{
   const fresh=normalizePositions({data:all});
   console.log(name+": "+all.length+" published; "+fresh.length+" with recent valid coordinates");
   if(all.length)console.log(name+" fields: "+Object.keys(all[0]).join(", "));
+  if(name==="CP"){
+   const keys=["vehicle_id","trip_id","ride_id","route_id","route_short_name","pattern_id","operational_date","calendar_date"];
+   for(const p of all.slice(0,14)){
+    console.log("CP ID CROSSWALK",JSON.stringify(Object.fromEntries(keys.map(k=>[k,p[k]??null]))));
+   }
+   const distinctRoutes=new Map();
+   for(const p of all){const route=String(p.route_short_name??"");distinctRoutes.set(route,(distinctRoutes.get(route)||0)+1)}
+   console.log("CP ROUTE SHORT NAMES",JSON.stringify([...distinctRoutes]));
+  }
  }
 }catch(e){console.log("TML position diagnostic unavailable: "+String(e?.message||e));}
 finally{clearTimeout(timeout)}
