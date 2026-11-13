@@ -1,7 +1,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./style.css";
-import {CP_AGENCY,FT_AGENCY,TML_URL,FT_FALLBACK_URL,normalizePositions,fetchJson} from "./live-positions.js";
+import {CP_AGENCY,FT_AGENCY,TML_URL,FT_FALLBACK_URL,normalizePositions,fetchJson as fetchRemoteJson} from "./live-positions.js";
 
 const BASE = import.meta.env.BASE_URL;
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
@@ -69,14 +69,14 @@ async function loadGps(){
  dom.gpsStatus.textContent="GPS: a consultar TML…";
  let direct=[],directError=null;
  try{
-  direct=normalizePositions(await fetchJson(TML_URL));
+  direct=normalizePositions(await fetchRemoteJson(TML_URL));
  }catch(e){directError=e?.message||String(e)}
  let ftFallback=[];
  // If TML is inaccessible in the WebView or has no Fertagus positions,
  // reuse the *existing TML proxy only for Fertagus*; never reuse a CP/Rui Costa feed.
  if(!direct.some(v=>v.agency===FT_AGENCY)){
   try{
-   const response=await fetchJson(FT_FALLBACK_URL);
+   const response=await fetchRemoteJson(FT_FALLBACK_URL);
    ftFallback=normalizePositions({positions:response?.positions||[]},{agencyAllowlist:[FT_AGENCY]});
   }catch(e){console.warn("Fertagus TML fallback unavailable:",e)}
  }
