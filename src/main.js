@@ -141,6 +141,146 @@ function renderGps(){
 }
 
 
+// Posicionamento ESTIMADO (não GPS): cada ficha e popup expõe origem e método.
+function estimatedLabel(v){
+ return v.level==="cp-anchored"?"Estimativa CP + GTFS":"Previsão só horário GTFS";
+}
+function estimatedBadge(v){
+ return '<span class="estimateChip '+safeText(v.level)+'">≈ '+safeText(estimatedLabel(v))+' · NÃO GPS</span>';
+}
+function estimatedDetails(v){
+ const cpTime=v.updatedAt?new Date(v.updatedAt).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"CP não consultada";
+ const pct=v.progress==null?"não aplicável":Math.round(v.progress*100)+"% teórico do troço";
+ return '<div class="estimateDetail"><p><strong>≈ POSIÇÃO ESTIMADA · NÃO GPS</strong></p>'+
+  '<p>'+safeText(v.type+" "+v.number)+" · "+safeText(v.origin)+" → "+safeText(v.destination)+'</p>'+
+  '<p>Classificação: '+safeText(estimatedLabel(v))+'</p>'+
+  '<p>Estimado entre: '+safeText((v.fromStation??"—")+" → "+(v.toStation??"—"))+'</p>'+
+  '<p>Avanço calculado: '+safeText(pct)+'</p>'+
+  '<p>Fonte: '+safeText(v.source)+'</p>'+
+  '<p>Método: '+safeText(v.basis)+'</p>'+
+  '<p>CP: '+safeText(v.cpStatus??"não consultada")+
+  ' · atraso: '+safeText(v.cpDelayMinutes==null?"não indicado":v.cpDelayMinutes+" min")+'</p>'+
+  '<p>Última estação informada pela CP: '+safeText(v.lastCpStation??"não indicada")+
+  ' · consulta CP: '+safeText(cpTime)+'</p>'+
+  '<p><strong>INCERTEZA ELEVADA:</strong> '+safeText(v.note)+'</p></div>';
+}
+function estimatedIcon(v){
+ const anchored=v.level==="cp-anchored";
+ return L.divIcon({className:"estimateIcon",html:'<span class="estimateMarker '+(anchored?"cpAnchor":"scheduleOnly")+
+  '" title="NÃO GPS">≈<small>'+safeText(v.type)+'</small></span>',
+  iconSize:[34,34],iconAnchor:[17,17]});
+}
+function renderEstimates(){
+ estimatedMarkers.clearLayers();
+ const cpOn=dom.showCpEstimates.checked,gtfsOn=dom.showScheduleEstimates.checked;
+ const q=dom.q.value.trim().toLocaleLowerCase("pt-PT");
+ const visible=estimatedVehicles.filter(v=>
+  ((v.level==="cp-anchored"&&cpOn)||(v.level==="timetable"&&gtfsOn))&&
+  (selected==="ALL"||selected==="CP"||selected===v.type)&&
+  (!q||[v.number,v.type,v.origin,v.destination,v.fromStation,v.toStation,v.lastCpStation]
+   .some(s=>String(s??"").toLocaleLowerCase("pt-PT").includes(q))));
+ const anchored=estimatedVehicles.filter(v=>v.level==="cp-anchored").length;
+ dom.estimateStats.textContent="≈ "+estimatedVehicles.length+" marcadores estimados ("+anchored+
+   " apoiados em CP, "+(estimatedVehicles.length-anchored)+" só horários)";
+ dom.estimatedTrains.innerHTML=visible.length?
+  visible.slice(0,120).map((v,i)=>
+   '<button type="button" class="train estimatedRow '+safeText(v.level)+'" data-est-index="'+i+'">'+
+   '<span class="estimateSymbol">≈</span><span class="trainInfo">'+
+   '<strong>'+safeText(v.type+" "+v.number)+'</strong>'+
+   '<small>'+safeText(v.origin+" → "+v.destination)+'</small>'+
+   estimatedBadge(v)+'<small>Entre '+safeText((v.fromStation??"—")+" e "+(v.toStation??"—"))+'</small>'+
+   '<small>'+safeText(v.cpStatus?"Estado CP: "+v.cpStatus:"Circulação não confirmada")+'</small>'+
+   '</span></button>').join("")+
+   (visible.length>120?'<p class="limit">A mostrar 120 de '+visible.length+
+   ' estimativas; usa a pesquisa para encontrar mais.</p>':""):
+   '<p class="empty">Sem estimativas nestes filtros. Ativa «Previsão só GTFS» para ver horários projetados.</p>';
+ const markerMap=new Map();
+ for(const v of visible){
+  const marker=L.marker([v.latitude,v.longitude],{icon:estimatedIcon(v),zIndexOffset:-700}).addTo(estimatedMarkers);
+  marker.bindTooltip("≈ "+safeText(v.type+" "+v.number)+" · NÃO GPS");
+  marker.bindPopup(estimatedDetails(v),{maxWidth:320});
+  markerMap.set(v.tripId,marker);
+ }
+ dom.estimatedTrains.querySelectorAll("[data-est-index]").forEach(b=>b.onclick=()=>{
+  const v=visible[Number(b.dataset.estIndex)];
+  map.setView([v.latitude,v.longitude],11);
+  markerMap.get(v.tripId)?.openPopup();
+ });
+ const byTrip=new Map(estimatedVehicles.map(v=>[v.tripId,v]));
+ dom.trains.querySelectorAll("[data-estimate-chip]").forEach(x=>{
+  const v=byTrip.get(x.dataset.estimateTrip);
+  x.innerHTML=v?estimatedBadge(v):"";
+ });
+ const detail=document.querySelector("[data-estimate-detail]");
+ if(detail){
+  const v=byTrip.get(detail.dataset.estimateDetailTrip);
+  detail.innerHTML=v?estimatedBadge(v)+'<p>Fonte '+safeText(v.source)+' · '+safeText(v.basis)+
+   ' · '+safeText(v.fromStation??"—")+' → '+safeText(v.toStation??"—")+'</p>':"";
+ }
+}
+function refreshEstimates(){
+ estimatedVehicles=buildEstimatedPositions({trains:data?.trains??[],date:data?.date,now:Date.now(),
+  queries:[...operationalQueries.values()],gpsVehicles});
+ renderEstimates();
+}
+function focusEstimatedMarkers(){
+ const visible=estimatedVehicles.filter(v=>v.level==="cp-anchored"?
+  dom.showCpEstimates.checked:dom.showScheduleEstimates.checked);
+ if(!visible.length){dom.estimateStats.textContent="Não há estimativas para centrar.";return}
+ selected="ALL";dom.q.value="";
+ renderTypes();renderTrains();renderGps();renderEstimates();
+ const bounds=L.latLngBounds(visible.map(v=>[v.latitude,v.longitude]));
+ if(bounds.isValid()){map.invalidateSize();map.fitBounds(bounds.pad(.12),{maxZoom:9,animate:false})}
+}
+dom.focusEstimated.onclick=focusEstimatedMarkers;
+dom.showCpEstimates.onchange=renderEstimates;
+dom.showScheduleEstimates.onchange=renderEstimates;
+
+// CP direct queries restricted to 6 scheduled candidates per 5-minute batch,
+// only while application is open. No bulk scraping and no secret persistence.
+async function limitedCpNationalRefresh(){
+ if(cpAutoBusy||!tmlChecked||!data?.trains||data.date!==currentLisbon().date)return;
+ const now=Date.now();
+ if(now-cpAutoLastBatch<5*60*1000)return;
+ const choices=[],seen=new Set();
+ const pool=estimatedVehicles.filter(v=>v.level==="timetable"&&/^\d{1,6}$/.test(v.number));
+ for(const type of ["IR","IC","AP","R","U","R","IR","IC","AP","R"]){
+  const next=pool.find(v=>v.type===type&&!seen.has(v.number)&&
+   (!operationalQueries.has(v.number)||now-Date.parse(operationalQueries.get(v.number)?.checkedAt??0)>12*60*1000));
+  if(next){choices.push(next);seen.add(next.number);}
+  if(choices.length>=6)break;
+ }
+ if(!choices.length)return;
+ cpAutoBusy=true;cpAutoLastBatch=now;
+ dom.cpAutoStatus.textContent="CP nacional: a consultar "+choices.length+" comboios (amostra limitada)…";
+ const transport=async (url,options)=>{
+  if(url===CP_CONFIG_URL&&cpConfigCache&&Date.now()-cpConfigCachedAt<120000)return cpConfigCache;
+  const payload=await fetchRemoteJson(url,options);
+  if(url===CP_CONFIG_URL){cpConfigCache=payload;cpConfigCachedAt=Date.now()}
+  return payload;
+ };
+ let ok=0,failed=0;
+ try{
+  for(const v of choices){
+   if(data.date!==currentLisbon().date)break;
+   try{
+    const result=await lookupCpOperational({number:v.number,date:data.date,transport});
+    operationalQueries.set(v.number,{date:data.date,number:v.number,
+     checkedAt:new Date().toISOString(),success:true,result});
+    ok++;
+   }catch(e){
+    operationalQueries.set(v.number,{date:data.date,number:v.number,
+     checkedAt:new Date().toISOString(),success:false});
+    failed++;
+   }
+   await new Promise(resolve=>setTimeout(resolve,650));
+  }
+  renderCoverage();refreshEstimates();
+  dom.cpAutoStatus.textContent="CP nacional: "+ok+" respostas, "+failed+
+    " indisponíveis (lote limitado; não representa toda a rede).";
+ }finally{cpAutoBusy=false}
+}
+
 function renderCoverage(){
  const day=data?.date??null;
  const report=coverageAudit({
