@@ -16,6 +16,7 @@ export function gpsIndicator({number,tripId=null,date,vehicles=[],now=Date.now()
   return {state:"not-current",label:"GPS não disponível para esta data",
    detail:"O GPS só pode ser atribuído a posições atuais, nunca a horários de outra data."};
  const match=(vehicles??[]).filter(v=>{
+  if(v?.gpsVerified===false||v?.positionSource==="Comboios Live")return false;
   if(String(v?.agency)!==CP_AGENCY||!ref||String(v?.trainNumber??"")!==ref)return false;
   // If GTFS trip identity is available, avoid attributing a second same-number
   // train's location to this service.
@@ -30,6 +31,15 @@ export function gpsIndicator({number,tripId=null,date,vehicles=[],now=Date.now()
    observedAt:new Date(latest.timestamp).toISOString(),
    detail:"Posição recente publicada pela TML, não interpolada."};
  }
+ const live=(vehicles??[]).find(v=>{
+  if(v?.positionSource!=="Comboios Live"||v?.gpsVerified!==false||
+    String(v?.trainNumber??"")!==ref||!ref||v?.agency!==CP_AGENCY)return false;
+  const lat=Number(v?.latitude),lon=Number(v?.longitude);
+  return Number.isFinite(lat)&&Number.isFinite(lon)&&lat>=36&&lat<=43&&lon>=-10&&lon<=-6;
+ });
+ if(live)return {state:"live-location",label:"Localização Live · GPS por confirmar",
+  source:"Comboios Live",observedAt:Number.isFinite(live.timestamp)?new Date(live.timestamp).toISOString():null,
+  detail:"Coordenadas disponibilizadas pelo Comboios Live / Rui Costa. A origem GPS e a hora da posição não estão necessariamente confirmadas."};
  if(sourceError)return {state:"unknown",label:"GPS não verificado",
    detail:"Fonte TML indisponível: não foi possível confirmar se existe posição."};
  return {state:"not-received",label:"Sem GPS recebido",
