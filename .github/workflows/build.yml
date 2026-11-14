@@ -42,6 +42,9 @@ jobs:
       - name: Sondar fontes nacionais CP e IP (sem atribuir GPS)
         continue-on-error: true
         run: node scripts/probe-national.mjs
+      - name: Diagnosticar localizações complementares Comboios Live
+        continue-on-error: true
+        run: node scripts/diagnose-live.mjs
       - name: Gerar pacote unificado CP + TML + ETA + alertas
         run: node scripts/build-unified.mjs
       - name: Instalar dependências, testar GPS e compilar WebApp

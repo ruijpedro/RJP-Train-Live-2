@@ -59,7 +59,7 @@ gpsMarkers.addTo(map);
 function safeText(v){return String(v??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));}
 function statusGps(number,tripId=null,date=data?.date){
  return gpsIndicator({number,tripId,date,vehicles:gpsVehicles,checked:tmlChecked&&liveChecked,
-  sourceError:!!lastTmlError&&!!lastLiveError,now:Date.now(),maxAgeMs:GPS_MAX_AGE_MS});
+  sourceError:!!lastTmlError||!!lastLiveError,now:Date.now(),maxAgeMs:GPS_MAX_AGE_MS});
 }
 function gpsChip(s){
  return '<span class="gpsChip '+safeText(s.state)+'" title="'+safeText(s.detail)+'">'+
