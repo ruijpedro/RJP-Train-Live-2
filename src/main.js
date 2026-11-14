@@ -4,8 +4,8 @@ import "./style.css";
 import {CP_AGENCY,FT_AGENCY,TML_URL,FT_FALLBACK_URL,normalizePositions,asRows} from "./live-positions.js";
 import {buildUnifiedFeed} from "./unified-feed.js";
 import {fetchTmlJson,fetchRemoteJson,transportLabel} from "./native-http.js";
-import {lookupCpOperational} from "./cp-operational.js";
-import {filterCatalogue,pageCatalogue,PAGE_SIZE,cpLookupNumber} from "./train-catalog.js";
+import {lookupCpOperational,CP_CONFIG_URL} from "./cp-operational.js";
+import {filterCatalogue,pageCatalogue,PAGE_SIZE,cpLookupNumber,sampleCpByType} from "./train-catalog.js";
 import {coverageAudit} from "./coverage-audit.js";
 import {gpsIndicator,GPS_MAX_AGE_MS} from "./gps-indicator.js";
 
@@ -16,7 +16,7 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.7-beta.1 · sinal GPS por comboio</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.8-beta.1 · consulta nacional CP</small></div>
 </header>
 <div class="sourceNote"><strong>CP nacional + GPS TML</strong><span>Cada comboio tem indicação de GPS: disponível (posição recente TML) ou sem GPS recebido. A ausência de coordenadas não significa que o veículo não tenha GPS. Só são desenhadas posições reportadas; os horários GTFS e os dados operacionais CP não geram marcadores.</span></div>
 <div class="controls">
@@ -34,6 +34,10 @@ el.innerHTML = `
  </div>
  <div id="cpResult" class="cpResult" aria-live="polite">A consulta só é executada quando carregas no botão; não afeta o mapa GPS.</div>
 </section>
+<section class="cpNationalSample" aria-label="Amostra de circulação nacional CP">
+ <div class="sampleHeader"><div><h2>CP nacional — consulta por categoria</h2><p>Seleciona cinco comboios pelo horário oficial e consulta diretamente a CP. Os estados não são GPS nem confirmam que todos estão em circulação.</p></div><button id="sampleNational" type="button">Consultar U · R · IR · IC · AP</button></div>
+ <div id="sampleResult" class="sampleResult" aria-live="polite">Consulta manual, limitada a cinco serviços, sem recolha contínua de toda a rede.</div>
+</section>
 <section class="labAudit" aria-label="Diagnóstico de fontes">
  <div class="labAuditMetrics"><div><small>CP com posição TML</small><b id="cpLive">—</b></div><div><small>CP identificados</small><b id="cpMatched">—</b></div><div><small>Fertagus com posição</small><b id="ftLive">—</b></div><div><small>CP programados (GTFS)</small><b id="scheduled">—</b></div><div><small>Respostas CP nesta sessão</small><b id="cpAnswered">0</b></div><div><small>Com indicadores CP</small><b id="cpEvidence">0</b></div></div>
  <p id="auditText">A aguardar diagnóstico de fontes…</p><div id="coverageTypes" class="coverageTypes" aria-label="Cobertura por tipo de comboio"></div><p id="coverageNote" class="coverageNote">GTFS ≠ circulação confirmada; indicadores CP ≠ localização GPS.</p>
@@ -46,7 +50,7 @@ el.innerHTML = `
 <footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. Coordenadas TML reportadas pelos operadores, com validade máxima de 3 minutos; GTFS CP = horários programados. Sem confirmação de atrasos, supressões ou cobertura nacional. Não utilizar para segurança da exploração.</footer>
 `;
 
-const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote"].map(id=>[id,document.getElementById(id)]));
+const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote","sampleNational","sampleResult"].map(id=>[id,document.getElementById(id)]));
 let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null;
 const map=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
@@ -221,6 +225,59 @@ async function queryCpNational(){
  }finally{dom.cpLookup.disabled=false}
 }
 dom.cpLookup.onclick=queryCpNational;
+
+async function queryNationalSamples(){
+ if(!data?.trains?.length){dom.sampleResult.textContent="Carrega primeiro os horários CP.";return;}
+ const date=dom.day.value;
+ if(date!==serviceDateLisbon()){
+  dom.sampleResult.textContent="Esta consulta é apenas para a data de hoje. Seleciona a data atual no catálogo.";
+  return;
+ }
+ const clock=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date());
+ const picked=sampleCpByType(data.trains,{clock});
+ if(!picked.length){dom.sampleResult.textContent="Sem amostras GTFS válidas nesta data.";return;}
+ const responses=[],errors=[];
+ let cachedConfig=null;
+ const transport=async (url,options)=>{
+  if(url===CP_CONFIG_URL){
+   if(cachedConfig)return cachedConfig;
+   cachedConfig=await fetchRemoteJson(url,options);
+   return cachedConfig;
+  }
+  return fetchRemoteJson(url,options);
+ };
+ dom.sampleNational.disabled=true;
+ dom.sampleResult.textContent="A consultar até "+picked.length+" comboios diretamente à CP…";
+ try{
+  for(const train of picked){
+   if(dom.day.value!==date){dom.sampleResult.textContent="Data alterada. Consulta interrompida.";return}
+   const number=String(train.number);
+   try{
+    const result=await lookupCpOperational({number,date,transport});
+    operationalQueries.set(number,{date,number,success:true,result});
+    responses.push({train,result});
+   }catch(e){
+    operationalQueries.set(number,{date,number,success:false});
+    errors.push({train,error:String(e?.message??e).replace(/https?:\/\/\S+/g,"[URL]").slice(0,130)});
+   }
+   renderCoverage();
+  }
+  const pieces=responses.map(({train,result})=>{
+   const delay=result.delayMinutes==null?"Atraso não indicado":result.delayMinutes+" min de atraso";
+   const signal=statusGps(result.number);
+   return '<div class="sampleTrain"><strong>'+safeText(result.type+" "+result.number)+'</strong>'+
+    '<span>'+safeText(result.status)+'</span><small>'+safeText(train.origin+" → "+train.destination)+'</small>'+
+    '<small>Última estação indicada: '+safeText(result.lastReportedStation??"não disponível")+'</small>'+
+    '<small>'+safeText(delay)+'</small>'+gpsChip(signal)+'</div>';
+  });
+  pieces.push(...errors.map(({train})=>'<div class="sampleTrain"><strong>'+safeText(train.type+" "+train.number)+'</strong><small>Consulta CP indisponível.</small></div>'));
+  dom.sampleResult.innerHTML='<p>'+responses.length+' respostas CP de '+picked.length+
+   ' consultas. Seleção pelo horário, sem GPS derivado da CP nem posições inventadas.</p>'+
+   pieces.join("")+'<p>Fonte: sistema de informação ao passageiro da CP. Consultas pontuais, não uma contagem de todos os comboios em circulação.</p>';
+ }finally{dom.sampleNational.disabled=false}
+}
+dom.sampleNational.onclick=queryNationalSamples;
+
 
 async function loadBuildAudit(){
  try{

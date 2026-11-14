@@ -75,3 +75,17 @@
 .scheduledRow .trainInfo [data-gps-chip]{display:block}
 .gpsRow .trainInfo .gpsChip{margin-top:5px}
 @media(max-width:800px){.gpsChip{font-size:9px;padding:4px 6px}}
+
+
+/* Five manually requested CP national operational samples; no GPS map markers. */
+.cpNationalSample{background:#102b3d;border-bottom:1px solid #335b73;padding:12px 16px}
+.cpNationalSample h2{font-size:16px;color:#a2e8ff;margin:0 0 5px}
+.cpNationalSample p{color:#b1c9df;font-size:12px;margin:5px 0}
+.sampleHeader{display:flex;gap:12px;justify-content:space-between;align-items:center}
+.sampleHeader button{flex:0 0 auto;border:1px solid #4cd9d1;border-radius:9px;background:#0f6576;color:#f3fdff;padding:10px;font-weight:700}
+.sampleHeader button:disabled{opacity:.5}
+.sampleResult{margin-top:10px;font-size:12px;color:#bcd9ea}
+.sampleTrain{display:flex;flex-direction:column;gap:3px;background:#0b2031;border:1px solid #2f556d;border-radius:9px;padding:9px;margin:7px 0}
+.sampleTrain strong{color:#98f7df;font-size:15px}
+.sampleTrain small{color:#bdd7e5}
+@media(max-width:800px){.cpNationalSample{padding:9px}.sampleHeader{align-items:stretch;flex-direction:column}.sampleHeader button{width:100%}}

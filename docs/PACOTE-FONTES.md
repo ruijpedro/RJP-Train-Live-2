@@ -77,3 +77,7 @@ Na APK, o painel de auditoria apresenta GTFS programado, TML com coordenadas atu
 ## Estado GPS nos links (2.0.7-beta.1)
 
 Os links de comboios CP exibem GPS disponível apenas com coordenadas TML publicadas com idade máxima de 3 minutos e associação verificável ao número/viagem do GTFS da data. Não receber posição não implica que o veículo não tenha equipamento GPS. Erros na fonte são etiquetados «GPS não verificado», não «sem sinal»; datas diferentes de hoje não herdam posições de hoje. A consulta operacional CP pode ser efetuada independentemente do sinal, e nunca cria pontos de GPS.
+
+
+## Amostra manual nacional CP (2.0.8-beta.1)
+Um botão na APK permite consultar, sob pedido explícito do utilizador, até cinco comboios (um U, R, IR, IC, AP) escolhidos com base nos horários GTFS da data corrente. As respostas vêm diretamente do sistema de informação ao passageiro da CP e mostram categoria, estado, atraso, última estação indicada e separadamente o sinal GPS real TML. Estes dados são uma amostra de resposta da CP, não representam a totalidade de serviços ativos, não geram pontos no mapa e não criam localização interpolada. A interface CP é experimental/não oficialmente documentada para terceiros e deve ser usada de forma contida.
