@@ -89,3 +89,32 @@
 .sampleTrain strong{color:#98f7df;font-size:15px}
 .sampleTrain small{color:#bdd7e5}
 @media(max-width:800px){.cpNationalSample{padding:9px}.sampleHeader{align-items:stretch;flex-direction:column}.sampleHeader button{width:100%}}
+
+
+/* Three visibly different classes: TML GPS, CP-anchored estimate, and GTFS-only. */
+.estimatePanel{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#262637;
+ border-bottom:1px solid #70618a;padding:11px 16px;color:#f1e5ff}
+.estimatePanel>div{display:flex;flex-direction:column;gap:3px;min-width:180px}
+.estimatePanel span,.estimatePanel small{font-size:11px;color:#ddd0ef}
+.estimatePanel label{display:inline-flex;gap:6px;align-items:center;font-size:12px}
+.estimatePanel input{accent-color:#ac8cf8;width:17px;height:17px}
+#cpAutoStatus{flex-basis:100%}
+.estimatedBtn{background:#794a9b!important;border-color:#cdaaf2!important}
+.estimateIcon{background:transparent;border:0}
+.estimateMarker{width:33px;height:33px;border-radius:50%;display:flex;justify-content:center;align-items:center;
+ font-weight:900;font-size:17px;border:2px dashed #fff;box-shadow:0 2px 8px #000a}
+.estimateMarker small{font-size:8px;letter-spacing:-.4px}
+.estimateMarker.cpAnchor{background:#8f65c7;color:#fff}
+.estimateMarker.scheduleOnly{background:#f0b959;color:#20212c}
+.estimateResults{padding-bottom:12px;border-bottom:1px solid #284259;margin-bottom:15px}
+.estimatedRow{border-style:dashed;border-color:#8e6db4}
+.estimatedRow.timetable{border-color:#af8546}
+.estimateSymbol{background:#9b7ec7;color:#fff;border-radius:50%;width:36px;height:36px;display:grid;place-items:center;font-size:22px;font-weight:800;flex:none}
+.estimatedRow.timetable .estimateSymbol{background:#e6a744;color:#17212a}
+.estimateChip{display:inline-flex;white-space:normal;align-items:center;border:1px dashed #ab92cc;
+ padding:4px 7px;border-radius:8px;margin:5px 0;color:#e8d6ff;font-weight:bold;font-size:10px}
+.estimateChip.timetable{border-color:#d9a24f;color:#ffdfa1}
+.estimateDetail{font-size:12px;line-height:1.45;color:#252525}
+.estimateDetail p{margin:6px 0}
+.estimateDetail strong{color:#623888}
+@media(max-width:800px){.estimatePanel{gap:9px;padding:9px}.estimatePanel label{font-size:11px}}

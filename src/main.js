@@ -8,6 +8,7 @@ import {lookupCpOperational,CP_CONFIG_URL} from "./cp-operational.js";
 import {filterCatalogue,pageCatalogue,PAGE_SIZE,cpLookupNumber,sampleCpByType} from "./train-catalog.js";
 import {coverageAudit} from "./coverage-audit.js";
 import {gpsIndicator,GPS_MAX_AGE_MS} from "./gps-indicator.js";
+import {buildEstimatedPositions,currentLisbon} from "./estimated-positions.js";
 
 const BASE = import.meta.env.BASE_URL;
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
@@ -16,13 +17,13 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.8-beta.1 · consulta nacional CP</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.9-beta.1 · GPS e estimativas</small></div>
 </header>
-<div class="sourceNote"><strong>CP nacional + GPS TML</strong><span>Cada comboio tem indicação de GPS: disponível (posição recente TML) ou sem GPS recebido. A ausência de coordenadas não significa que o veículo não tenha GPS. Só são desenhadas posições reportadas; os horários GTFS e os dados operacionais CP não geram marcadores.</span></div>
+<div class="sourceNote"><strong>GPS real e estimativas nacionais</strong><span>Marcadores cheios: coordenadas reais TML. Marcadores ≈ tracejados: NÃO GPS. Roxo: estimativa ancorada na última estação CP; âmbar: previsão só pelo horário GTFS. As estimativas podem afastar-se muito da localização real.</span></div>
 <div class="controls">
  <label><span>Data</span><select id="day"><option>A carregar…</option></select></label>
  <label class="searchBox"><span>Pesquisar comboio ou estação</span><input id="q" placeholder="Número, origem, destino ou paragem" autocomplete="off"/></label>
- <button id="reload">Atualizar horários e GPS</button><button id="focusGps" type="button" class="focusBtn">Ver todos os GPS</button><button id="showNational" type="button" class="catalogBtn">Ver todos os CP (GTFS)</button>
+ <button id="reload">Atualizar horários e GPS</button><button id="focusGps" type="button" class="focusBtn">Ver todos os GPS</button><button id="focusEstimated" type="button" class="estimatedBtn">Ver estimativas nacionais</button><button id="showNational" type="button" class="catalogBtn">Ver todos os CP (GTFS)</button>
 </div>
 <div class="types" id="types"></div>
 <div class="stats"><span id="count">A carregar horários CP…</span><span id="freshness"></span><span id="gpsStatus" aria-live="polite">TML: a consultar posições…</span></div>
@@ -43,21 +44,29 @@ el.innerHTML = `
  <p id="auditText">A aguardar diagnóstico de fontes…</p><div id="coverageTypes" class="coverageTypes" aria-label="Cobertura por tipo de comboio"></div><p id="coverageNote" class="coverageNote">GTFS ≠ circulação confirmada; indicadores CP ≠ localização GPS.</p>
  <p id="buildAudit">Registo da compilação: a carregar…</p>
 </section>
+<div class="estimatePanel">
+ <div><strong>Localizações CP no mapa</strong><span id="estimateStats">A calcular posições aproximadas…</span></div>
+ <label><input id="showCpEstimates" type="checkbox" checked/> Estimativa CP + GTFS</label>
+ <label><input id="showScheduleEstimates" type="checkbox" checked/> Previsão só GTFS</label>
+ <small>Uma estimativa não comprova circulação ou passagem. As retas entre estações podem divergir do traçado ferroviário.</small>
+ <span id="cpAutoStatus" aria-live="polite">CP nacional: a preparar consultas limitadas.</span>
+</div>
 <div class="workspace">
  <div id="map" aria-label="Mapa de estações CP"></div>
- <section class="results"><h2>Posições reais reportadas pela TML</h2><p class="legendLab">Fonte + hora de posição · só aparece o número do comboio quando validado no GTFS da CP</p><div id="liveTrains" class="gpsResults"></div><h2 id="catalogHeading">Catálogo nacional CP — serviços programados</h2><p class="legendLab">Pesquisa nacional no GTFS. Cada comboio indica «GPS disponível» ou «Sem GPS recebido». Um horário sem GPS continua consultável na CP; nunca colocamos uma posição artificial.</p><div id="catalogCount" class="catalogCount">A carregar catálogo…</div><div id="trains"></div></section>
+ <section class="results"><h2>Posições reais reportadas pela TML</h2><p class="legendLab">Fonte + hora de posição · só aparece o número do comboio quando validado no GTFS da CP</p><div id="liveTrains" class="gpsResults"></div><h2>Comboios estimados — NÃO GPS</h2><p class="legendLab">≈ Roxo = CP + GTFS; ≈ âmbar = apenas horário, circulação não confirmada. Abre o comboio para ver fonte, estimativa e incerteza.</p><div id="estimatedTrains" class="estimateResults"></div><h2 id="catalogHeading">Catálogo nacional CP — serviços programados</h2><p class="legendLab">Pesquisa nacional no GTFS. Cada comboio indica «GPS disponível» ou «Sem GPS recebido». Quando não há GPS, podemos desenhar uma previsão APROXIMADA, identificada como estimativa, nunca como GPS.</p><div id="catalogCount" class="catalogCount">A carregar catálogo…</div><div id="trains"></div></section>
 </div>
-<footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. Coordenadas TML reportadas pelos operadores, com validade máxima de 3 minutos; GTFS CP = horários programados. Sem confirmação de atrasos, supressões ou cobertura nacional. Não utilizar para segurança da exploração.</footer>
+<footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. GPS TML (máx. 3 minutos) é distinto das estimativas CP + GTFS ou só GTFS. Estimativas não são localizações exatas nem confirmação de circulação. Não utilizar para segurança da exploração.</footer>
 `;
 
-const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote","sampleNational","sampleResult"].map(id=>[id,document.getElementById(id)]));
-let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),gpsVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null;
+const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote","sampleNational","sampleResult","focusEstimated","showCpEstimates","showScheduleEstimates","estimatedTrains","estimateStats","cpAutoStatus"].map(id=>[id,document.getElementById(id)]));
+let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),estimatedMarkers=L.layerGroup(),gpsVehicles=[],estimatedVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null,cpAutoBusy=false,cpAutoLastBatch=0,cpConfigCache=null,cpConfigCachedAt=0;
 const map=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",{maxZoom:19,opacity:.88,attribution:"OpenRailwayMap"}).addTo(map);
 stationMarkers.addTo(map);
 routeLayer.addTo(map);
 gpsMarkers.addTo(map);
+estimatedMarkers.addTo(map);
 
 function safeText(v){return String(v??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));}
 function statusGps(number,tripId=null,date=data?.date){

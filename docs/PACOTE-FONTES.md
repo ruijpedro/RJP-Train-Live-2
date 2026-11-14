@@ -81,3 +81,15 @@ Os links de comboios CP exibem GPS disponível apenas com coordenadas TML public
 
 ## Amostra manual nacional CP (2.0.8-beta.1)
 Um botão na APK permite consultar, sob pedido explícito do utilizador, até cinco comboios (um U, R, IR, IC, AP) escolhidos com base nos horários GTFS da data corrente. As respostas vêm diretamente do sistema de informação ao passageiro da CP e mostram categoria, estado, atraso, última estação indicada e separadamente o sinal GPS real TML. Estes dados são uma amostra de resposta da CP, não representam a totalidade de serviços ativos, não geram pontos no mapa e não criam localização interpolada. A interface CP é experimental/não oficialmente documentada para terceiros e deve ser usada de forma contida.
+
+
+## Posições estimadas em separado do GPS (2.0.9-beta.1)
+
+- TML GPS (marcadores cheios): coordenadas reportadas, com validade máxima de 3 minutos, sempre prioritárias.
+- CP + GTFS (marcadores roxos ≈): interpolação temporal ancorada na última estação indicada por uma consulta CP recente, quando é possível associá-la ao GTFS. O atraso CP, quando indicado, ajusta o horário projetado.
+- Só GTFS (marcadores âmbar ≈): interpolação temporal por horário entre estações consecutivas, sem confirmação de circulação.
+- A posição estimada usa uma reta geográfica entre duas estações; pode ficar fora do traçado ferroviário, sobretudo nos troços longos. Não é GPS.
+- Estados CP terminais conhecidos e recentes não geram estimativas; o GPS TML associado tem sempre precedência.
+- Cada ficha, popup e marcador deixa explícitos a fonte, método, estações de referência, hora da consulta CP e incerteza elevada. As duas famílias de estimativas podem ser desligadas.
+- Consultas automáticas CP em lotes conservadores até 6 comboios por intervalo de 5 minutos com a app aberta, para obter amostras operacionais sem varrer toda a rede.
+- Não utilizar para segurança da exploração ou para afirmar a localização exata de comboios. A Trains original permanece inalterada.
