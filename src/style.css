@@ -75,3 +75,10 @@
 .scheduledRow .trainInfo [data-gps-chip]{display:block}
 .gpsRow .trainInfo .gpsChip{margin-top:5px}
 @media(max-width:800px){.gpsChip{font-size:9px;padding:4px 6px}}
+
+/* Verified TML points use filled rail badges; third-party complementary
+   locations use dashed amber rings so they cannot be mistaken for TML GPS. */
+.gpsMarkerLive{border:3px dashed #facc15!important;background:#42320f!important;color:#fff7d1!important;
+ box-shadow:0 0 0 3px #0009,0 2px 7px #0008}
+.liveRow{border-color:#8a6929;background:#2b2931}
+.gpsChip.live-location{color:#fff0b5;background:#493a20;border-color:#a78a46}
