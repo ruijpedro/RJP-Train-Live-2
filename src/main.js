@@ -335,7 +335,12 @@ function refreshUnified(){
  dom.auditText.textContent="Recolha atual: "+new Date(snapshot.generatedAt).toLocaleTimeString("pt-PT")+
    " · "+c.cpUnmatched+" CP por identificar · cobertura TML parcial, não nacional"+(lastTmlError?" · consulta direta indisponível":"");
  renderGps();
- if(!didFocusGps&&gpsVehicles.length){didFocusGps=true;focusGpsMarkers()}
+ refreshEstimates();
+ if(!didFocusGps&&gpsVehicles.length){
+  didFocusGps=true;
+  if(!estimatedVehicles.length)focusGpsMarkers();
+ }
+ limitedCpNationalRefresh();
 }
 async function queryCpNational(){
  const number=dom.cpNumber.value.trim(),date=dom.day.value;
@@ -346,6 +351,7 @@ async function queryCpNational(){
   if(date!==dom.day.value){dom.cpResult.textContent="Data alterada; resposta anterior não foi contabilizada.";return;}
   operationalQueries.set(number,{date,number,success:true,result:r});
   renderCoverage();
+  refreshEstimates();
   const signal=statusGps(number);
   const signalHtml=gpsChip(signal);
   const delay=r.delayMinutes===null?"sem indicação de atraso":(r.delayMinutes+" min reportados");
@@ -367,6 +373,7 @@ async function queryCpNational(){
   if(date===dom.day.value&&/^\d{1,6}$/.test(number)){
    operationalQueries.set(number,{date,number,success:false});
    renderCoverage();
+   refreshEstimates();
   }
   const message=String(e?.message||e).replace(/https?:\/\/[^ ]+/g,"[URL]");
   dom.cpResult.textContent="CP operacional indisponível: "+message+
@@ -410,6 +417,7 @@ async function queryNationalSamples(){
     errors.push({train,error:String(e?.message??e).replace(/https?:\/\/\S+/g,"[URL]").slice(0,130)});
    }
    renderCoverage();
+   refreshEstimates();
   }
   const pieces=responses.map(({train,result})=>{
    const delay=result.delayMinutes==null?"Atraso não indicado":result.delayMinutes+" min de atraso";
@@ -484,9 +492,11 @@ function viewTrain(t){
  panel.className="details";
  panel.innerHTML=`<div><strong>${safeText(t.type)} ${safeText(t.number)}</strong> · ${safeText(t.origin)} → ${safeText(t.destination)}</div><div class="detailsGps" data-gps-detail-number="${safeText(t.number)}" data-gps-detail-trip="${safeText(t.id)}">${gpsChip(statusGps(t.number,t.id))}</div><p>Paragens programadas (não há confirmação de passagem em direto)</p>`+
  (t.stops||[]).map(s=>`<div class="stop"><span>${safeText(s.name)}</span><span>${safeText(s.departure||s.arrival)}</span></div>`).join("");
+ panel.innerHTML+='<div data-estimate-detail="'+safeText(t.number)+'" data-estimate-detail-trip="'+safeText(t.id)+'"></div>';
  const existing=document.querySelector(".details");if(existing)existing.remove();
  document.querySelector(".results").append(panel);
  panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+ renderEstimates();
 }
 function renderTrains(){
  if(!data){renderGps();return;}
@@ -500,7 +510,7 @@ function renderTrains(){
   return '<div class="train scheduledRow">'+
    '<button type="button" class="trainMain" data-index="'+i+'">'+
    '<span class="pill" style="--type-color:'+(COLORS[t.type]||COLORS.CP)+'">'+safeText(t.type)+'</span>'+
-   '<span class="trainInfo"><strong>'+safeText(t.number)+'</strong><small>'+safeText(t.origin)+" → "+safeText(t.destination)+'</small><span data-gps-chip data-train-number="'+safeText(t.number)+'" data-trip-id="'+safeText(t.id)+'">'+gpsChip(status)+'</span></span>'+
+   '<span class="trainInfo"><strong>'+safeText(t.number)+'</strong><small>'+safeText(t.origin)+" → "+safeText(t.destination)+'</small><span data-gps-chip data-train-number="'+safeText(t.number)+'" data-trip-id="'+safeText(t.id)+'">'+gpsChip(status)+'</span><span data-estimate-chip data-estimate-trip="'+safeText(t.id)+'"></span></span>'+
    '<span class="hours"><b>'+safeText(t.departure)+" → "+safeText(t.arrival)+'</b><small>GTFS previsto</small></span></button>'+
    (number?'<button type="button" class="trainLookup" data-cp-index="'+i+'" aria-label="Consultar CP '+safeText(number)+' diretamente">Consultar CP</button>':'')+
    '</div>';
@@ -524,6 +534,7 @@ function renderTrains(){
  document.querySelector(".details")?.remove();
  routeLayer.clearLayers();
  renderGps();
+ renderEstimates();
 }
 async function fetchJson(path){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
@@ -554,7 +565,7 @@ async function load(){
 }
 dom.q.addEventListener("input",()=>{listLimit=PAGE_SIZE;renderTrains();renderGps()});
 dom.day.addEventListener("change",()=>{listLimit=PAGE_SIZE;loadDay(dom.day.value)});
-dom.reload.onclick=()=>{load();loadGps()};
+dom.reload.onclick=()=>{load();loadGps();cpAutoLastBatch=0};
 dom.focusGps.onclick=()=>focusGpsMarkers();
 dom.showNational.onclick=()=>{
  selected="ALL";dom.q.value="";listLimit=PAGE_SIZE;
@@ -566,3 +577,6 @@ loadBuildAudit();
 load();
 loadGps();
 setInterval(loadGps,30000);
+
+setInterval(refreshEstimates,30000);
+setInterval(limitedCpNationalRefresh,5*60*1000);
