@@ -1,4 +1,4 @@
-name: RJP Train Live 2.0 - CP GTFS + Live fallback
+name: RJP Train Live 2.0 - CP GTFS
 
 on:
   push:
@@ -42,9 +42,6 @@ jobs:
       - name: Sondar fontes nacionais CP e IP (sem atribuir GPS)
         continue-on-error: true
         run: node scripts/probe-national.mjs
-      - name: Diagnosticar localizações complementares Comboios Live
-        continue-on-error: true
-        run: node scripts/diagnose-live.mjs
       - name: Gerar pacote unificado CP + TML + ETA + alertas
         run: node scripts/build-unified.mjs
       - name: Instalar dependências, testar GPS e compilar WebApp
@@ -64,8 +61,6 @@ jobs:
             public/data/unified/
             public/data/cp/
             src/live-positions.js
-            src/live-fallback.js
-            src/gps-indicator.js
             src/unified-feed.js
             scripts/build-unified.mjs
             docs/PACOTE-FONTES.md
@@ -110,7 +105,7 @@ jobs:
           code=f.read_text()
           code,n=re.subn(r'\bversionCode\s+\d+',f"versionCode {200000+int(os.environ['GITHUB_RUN_NUMBER'])}",code,count=1)
           assert n == 1
-          code,n=re.subn(r'\bversionName\s+["\'][^"\']+["\']','versionName "2.0.8-beta.1"',code,count=1)
+          code,n=re.subn(r'\bversionName\s+["\'][^"\']+["\']','versionName "2.0.7-beta.1"',code,count=1)
           assert n == 1
           f.write_text(code)
           PY

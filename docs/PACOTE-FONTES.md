@@ -77,9 +77,3 @@ Na APK, o painel de auditoria apresenta GTFS programado, TML com coordenadas atu
 ## Estado GPS nos links (2.0.7-beta.1)
 
 Os links de comboios CP exibem GPS disponível apenas com coordenadas TML publicadas com idade máxima de 3 minutos e associação verificável ao número/viagem do GTFS da data. Não receber posição não implica que o veículo não tenha equipamento GPS. Erros na fonte são etiquetados «GPS não verificado», não «sem sinal»; datas diferentes de hoje não herdam posições de hoje. A consulta operacional CP pode ser efetuada independentemente do sinal, e nunca cria pontos de GPS.
-
-## Fonte complementar Comboios Live (2.0.8-beta.1)
-
-O laboratório usa as coordenadas TML primeiro e, onde falta número de comboio CP com posição TML, consulta como fonte complementar **Comboios Live / Rui Costa** através do proxy já existente na Trains original (sem modificar essa app). Se esse proxy falhar, tenta a consulta direta à fonte. A fonte complementar é indicada expressamente em cada comboio, nos detalhes e no mapa com marcação visual distinta. O estado «GPS disponível» reserva-se a posições TML recentes; «Localização Live · GPS por confirmar» significa que o Comboios Live forneceu latitude/longitude mas **não se validou a origem GNSS/GPS ou a hora real da posição**. Sem coordenadas válidas: «Sem GPS recebido»; falha de todas as fontes: «GPS não verificado». Nunca usamos coordenadas estáticas `fixed.latitude` como posições de um comboio, nem deduzimos localização por horários, linhas ou paragens. As localizações só aparecem no dia atual. A atribuição é pelo número publicado e pode não distinguir circulações homónimas sem identificador exclusivo.
-
-Esta integração preserva a origem e o caráter de terceira parte da informação; não estabelece autonomia nacional de GPS nem deve ser utilizada para segurança ferroviária.
