@@ -8,7 +8,7 @@ import {lookupCpOperational,CP_CONFIG_URL} from "./cp-operational.js";
 import {filterCatalogue,pageCatalogue,PAGE_SIZE,cpLookupNumber,sampleCpByType} from "./train-catalog.js";
 import {coverageAudit} from "./coverage-audit.js";
 import {gpsIndicator,GPS_MAX_AGE_MS} from "./gps-indicator.js";
-import {buildEstimatedPositions,currentLisbon} from "./estimated-positions.js";
+import {buildEstimatedPositions,currentLisbon,previousServiceDate} from "./estimated-positions.js";
 
 const BASE = import.meta.env.BASE_URL;
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
@@ -17,7 +17,7 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.9-beta.1 · GPS e estimativas</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.10-beta.1 · mapa CP nacional</small></div>
 </header>
 <div class="sourceNote"><strong>GPS real e estimativas nacionais</strong><span>Marcadores cheios: coordenadas reais TML. Marcadores ≈ tracejados: NÃO GPS. Roxo: estimativa ancorada na última estação CP; âmbar: previsão só pelo horário GTFS. As estimativas podem afastar-se muito da localização real.</span></div>
 <div class="controls">
@@ -45,11 +45,13 @@ el.innerHTML = `
  <p id="buildAudit">Registo da compilação: a carregar…</p>
 </section>
 <div class="estimatePanel">
- <div><strong>Localizações CP no mapa</strong><span id="estimateStats">A calcular posições aproximadas…</span></div>
+ <div><strong>Localizações CP no mapa</strong><span id="estimateStats">A calcular posições aproximadas…</span><span id="mapTotals">A contar GPS e estimativas…</span></div>
  <label><input id="showCpEstimates" type="checkbox" checked/> Estimativa CP + GTFS</label>
  <label><input id="showScheduleEstimates" type="checkbox" checked/> Previsão só GTFS</label>
+ <label><input id="showStations" type="checkbox"/> Mostrar estações</label>
  <small>Uma estimativa não comprova circulação ou passagem. As retas entre estações podem divergir do traçado ferroviário.</small>
  <span id="cpAutoStatus" aria-live="polite">CP nacional: a preparar consultas limitadas.</span>
+ <span id="serviceDayNotice" aria-live="polite"></span>
 </div>
 <div class="workspace">
  <div id="map" aria-label="Mapa de estações CP"></div>
@@ -58,12 +60,13 @@ el.innerHTML = `
 <footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. GPS TML (máx. 3 minutos) é distinto das estimativas CP + GTFS ou só GTFS. Estimativas não são localizações exatas nem confirmação de circulação. Não utilizar para segurança da exploração.</footer>
 `;
 
-const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote","sampleNational","sampleResult","focusEstimated","showCpEstimates","showScheduleEstimates","estimatedTrains","estimateStats","cpAutoStatus"].map(id=>[id,document.getElementById(id)]));
-let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),estimatedMarkers=L.layerGroup(),gpsVehicles=[],estimatedVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null,cpAutoBusy=false,cpAutoLastBatch=0,cpConfigCache=null,cpConfigCachedAt=0;
+const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote","sampleNational","sampleResult","focusEstimated","showCpEstimates","showScheduleEstimates","estimatedTrains","estimateStats","cpAutoStatus","showStations","mapTotals","serviceDayNotice"].map(id=>[id,document.getElementById(id)]));
+let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),estimatedMarkers=L.layerGroup(),gpsVehicles=[],estimatedVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null,cpAutoBusy=false,cpAutoLastBatch=0,cpConfigCache=null,cpConfigCachedAt=0,previousDayData=null,didInitialAutoFit=false,manualDateSelection=false,dayRequestSeq=0,lastLocalServiceDate=currentLisbon().date;
 const map=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",{maxZoom:19,opacity:.88,attribution:"OpenRailwayMap"}).addTo(map);
-stationMarkers.addTo(map);
+// Hide station dots by default: they previously obscured nationwide trains.
+dom.showStations.onchange=()=>dom.showStations.checked?stationMarkers.addTo(map):map.removeLayer(stationMarkers);
 routeLayer.addTo(map);
 gpsMarkers.addTo(map);
 estimatedMarkers.addTo(map);
@@ -89,7 +92,7 @@ function sameLocation(p){return Array.isArray(p)&&p.length===2&&p.every(Number.i
 function setMessage(msg){dom.count.textContent=msg;}
 function renderTypes(){
  dom.types.innerHTML=["ALL",...TYPES].map(t=>`<button class="type ${selected===t?"active":""}" data-type="${t}" style="--type-color:${COLORS[t]||"#38bdf8"}">${t==="ALL"?"Todos":t}</button>`).join("");
- dom.types.querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=b.dataset.type;listLimit=PAGE_SIZE;renderTypes();renderTrains();renderGps();});
+ dom.types.querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=b.dataset.type;listLimit=PAGE_SIZE;renderTypes();renderTrains();renderGps();renderEstimates();});
 }
 
 function focusGpsMarkers(){
@@ -180,8 +183,9 @@ function renderEstimates(){
   (!q||[v.number,v.type,v.origin,v.destination,v.fromStation,v.toStation,v.lastCpStation]
    .some(s=>String(s??"").toLocaleLowerCase("pt-PT").includes(q))));
  const anchored=estimatedVehicles.filter(v=>v.level==="cp-anchored").length;
- dom.estimateStats.textContent="≈ "+estimatedVehicles.length+" marcadores estimados ("+anchored+
-   " apoiados em CP, "+(estimatedVehicles.length-anchored)+" só horários)";
+ dom.estimateStats.textContent="≈ "+estimatedVehicles.length+" previsões de circulação";
+ dom.mapTotals.textContent=gpsVehicles.length+" coordenadas TML · "+anchored+
+  " estimativas apoiadas na CP · "+(estimatedVehicles.length-anchored)+" só pelo horário";
  dom.estimatedTrains.innerHTML=visible.length?
   visible.slice(0,120).map((v,i)=>
    '<button type="button" class="train estimatedRow '+safeText(v.level)+'" data-est-index="'+i+'">'+
@@ -219,9 +223,10 @@ function renderEstimates(){
  }
 }
 function refreshEstimates(){
- estimatedVehicles=buildEstimatedPositions({trains:data?.trains??[],date:data?.date,now:Date.now(),
+ estimatedVehicles=buildEstimatedPositions({trains:data?.trains??[],date:data?.date,previousDay:previousDayData,now:Date.now(),
   queries:[...operationalQueries.values()],gpsVehicles});
  renderEstimates();
+ autoFitNationalOnce();
 }
 function focusEstimatedMarkers(){
  const visible=estimatedVehicles.filter(v=>v.level==="cp-anchored"?
@@ -336,10 +341,6 @@ function refreshUnified(){
    " · "+c.cpUnmatched+" CP por identificar · cobertura TML parcial, não nacional"+(lastTmlError?" · consulta direta indisponível":"");
  renderGps();
  refreshEstimates();
- if(!didFocusGps&&gpsVehicles.length){
-  didFocusGps=true;
-  if(!estimatedVehicles.length)focusGpsMarkers();
- }
  limitedCpNationalRefresh();
 }
 async function queryCpNational(){
@@ -444,7 +445,7 @@ async function loadBuildAudit(){
   const eta=d.sources?.tmlEta?.status??"não testado",alerts=d.sources?.tmlAlerts?.status??"não testado";
   dom.buildAudit.textContent="Compilação "+new Date(d.checkedAt).toLocaleString("pt-PT")+
    " (histórico, NÃO ao vivo) · ETA TML "+eta+" · Alertas "+alerts+
-   " · IP e CP operacional: integração pendente";
+   " · consulta operacional nacional CP: disponível na app, não é GPS";
  }catch(e){dom.buildAudit.textContent="Diagnóstico da compilação indisponível: "+e.message}
 }
 async function loadGps(){
@@ -563,9 +564,9 @@ async function load(){
   await loadDay(dom.day.value);
  }catch(e){setMessage("Não foi possível obter a base CP: "+e.message);dom.trains.innerHTML="<p class='empty'>Sem base GTFS importada. Compila o projeto através do workflow da versão 2.0.</p>";}
 }
-dom.q.addEventListener("input",()=>{listLimit=PAGE_SIZE;renderTrains();renderGps()});
-dom.day.addEventListener("change",()=>{listLimit=PAGE_SIZE;loadDay(dom.day.value)});
-dom.reload.onclick=()=>{load();loadGps();cpAutoLastBatch=0};
+dom.q.addEventListener("input",()=>{listLimit=PAGE_SIZE;renderTrains();renderGps();renderEstimates()});
+dom.day.addEventListener("change",()=>{manualDateSelection=true;listLimit=PAGE_SIZE;loadDay(dom.day.value)});
+dom.reload.onclick=()=>{didInitialAutoFit=false;load();loadGps();cpAutoLastBatch=0};
 dom.focusGps.onclick=()=>focusGpsMarkers();
 dom.showNational.onclick=()=>{
  selected="ALL";dom.q.value="";listLimit=PAGE_SIZE;

@@ -93,3 +93,8 @@ Um botão na APK permite consultar, sob pedido explícito do utilizador, até ci
 - Cada ficha, popup e marcador deixa explícitos a fonte, método, estações de referência, hora da consulta CP e incerteza elevada. As duas famílias de estimativas podem ser desligadas.
 - Consultas automáticas CP em lotes conservadores até 6 comboios por intervalo de 5 minutos com a app aberta, para obter amostras operacionais sem varrer toda a rede.
 - Não utilizar para segurança da exploração ou para afirmar a localização exata de comboios. A Trains original permanece inalterada.
+
+
+## Mapa nacional / datas / Urbanos (2.0.10-beta.1)
+
+A data atual de Lisboa é selecionada automaticamente ao abrir e mudada à meia-noite, quando disponível no GTFS embutido. O motor inclui comboios da véspera com horários de chegada 24:xx/25:xx. O mapa enquadra posições TML + estimativas de todo o território; pontos de estações ocultos inicialmente, com opção para mostrar. Os Urbanos Sintra, Cascais, Sado, Azambuja, Aveiro, Marco, Braga, Guimarães e Leixões são reconhecidos como U quando o GTFS os denomina por linha. O número de comboios estimados é uma contagem de serviços teoricamente em curso, não uma declaração de circulação confirmada. A base GTFS da APK cobre 7 dias após a compilação: se o dia atual não existir na base, é apresentada informação de desatualização sem desenhar estimativas falsas.

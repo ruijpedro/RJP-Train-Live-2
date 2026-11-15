@@ -53,6 +53,16 @@ def type_from_route(route):
     if "SUD EXPRESSO" in raw or "SUDEXPRESSO" in raw: return "SUD"
     if "URBANO" in raw or "SUBURBANO" in raw: return "U"
     if "REGIONAL" in raw: return "R"
+    # Urban CP services are sometimes labelled by suburban line names in GTFS.
+    import unicodedata
+    primary = unicodedata.normalize("NFKD", str(route.get("route_long_name") or route.get("route_short_name") or ""))
+    primary = "".join(c for c in primary if not unicodedata.combining(c)).upper().strip()
+    suburban = {
+        "LINHA DE SINTRA", "LINHA DE CASCAIS", "LINHA DE AVEIRO",
+        "LINHA DO MARCO", "LINHA DE BRAGA", "LINHA DO SADO",
+        "LINHA DA AZAMBUJA", "LINHA DE LEIXOES", "LINHA DE GUIMARAES"
+    }
+    if primary in suburban: return "U"
     short = (route.get("route_short_name") or "").strip().upper()
     return short if short in {"U", "R", "IR", "IC", "AP", "SUD"} else "CP"
 
