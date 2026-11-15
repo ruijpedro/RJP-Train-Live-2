@@ -642,6 +642,9 @@ function checkServiceDayRollover(){
   didInitialAutoFit=false;
   dom.day.value=today;
   loadDay(today);
+ }else if(!manualDateSelection){
+  // Refresh the online rolling horizon if an app stays open for many days.
+  load();
  }else{
   serviceDayWarning();
  }
