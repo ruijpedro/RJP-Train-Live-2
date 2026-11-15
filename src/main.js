@@ -203,21 +203,21 @@ function renderEstimates(){
   const marker=L.marker([v.latitude,v.longitude],{icon:estimatedIcon(v),zIndexOffset:-700}).addTo(estimatedMarkers);
   marker.bindTooltip("≈ "+safeText(v.type+" "+v.number)+" · NÃO GPS");
   marker.bindPopup(estimatedDetails(v),{maxWidth:320});
-  markerMap.set(v.tripId,marker);
+  markerMap.set(v.date+":"+v.tripId,marker);
  }
  dom.estimatedTrains.querySelectorAll("[data-est-index]").forEach(b=>b.onclick=()=>{
   const v=visible[Number(b.dataset.estIndex)];
   map.setView([v.latitude,v.longitude],11);
-  markerMap.get(v.tripId)?.openPopup();
+  markerMap.get(v.date+":"+v.tripId)?.openPopup();
  });
- const byTrip=new Map(estimatedVehicles.map(v=>[v.tripId,v]));
+ const byTrip=new Map(estimatedVehicles.map(v=>[v.date+":"+v.tripId,v]));
  dom.trains.querySelectorAll("[data-estimate-chip]").forEach(x=>{
-  const v=byTrip.get(x.dataset.estimateTrip);
+  const v=byTrip.get(data.date+":"+x.dataset.estimateTrip);
   x.innerHTML=v?estimatedBadge(v):"";
  });
  const detail=document.querySelector("[data-estimate-detail]");
  if(detail){
-  const v=byTrip.get(detail.dataset.estimateDetailTrip);
+  const v=byTrip.get(data.date+":"+detail.dataset.estimateDetailTrip);
   detail.innerHTML=v?estimatedBadge(v)+'<p>Fonte '+safeText(v.source)+' · '+safeText(v.basis)+
    ' · '+safeText(v.fromStation??"—")+' → '+safeText(v.toStation??"—")+'</p>':"";
  }
@@ -248,7 +248,7 @@ async function limitedCpNationalRefresh(){
  const now=Date.now();
  if(now-cpAutoLastBatch<5*60*1000)return;
  const choices=[],seen=new Set();
- const pool=estimatedVehicles.filter(v=>v.level==="timetable"&&/^\d{1,6}$/.test(v.number));
+ const pool=estimatedVehicles.filter(v=>v.date===data.date&&v.level==="timetable"&&/^\d{1,6}$/.test(v.number));
  for(const type of ["IR","IC","AP","R","U","R","IR","IC","AP","R"]){
   const next=pool.find(v=>v.type===type&&!seen.has(v.number)&&
    (!operationalQueries.has(v.number)||now-Date.parse(operationalQueries.get(v.number)?.checkedAt??0)>12*60*1000));
