@@ -545,25 +545,89 @@ async function fetchJson(path){
   return await r.json();
  }finally{clearTimeout(timer);}
 }
+
+// Only fit when BOTH today's GTFS and TML response have been considered.
+// Earlier versions zoomed into Lisbon before national forecasts were ready.
+function autoFitNationalOnce(){
+ if(didInitialAutoFit||!tmlChecked||data?.date!==currentLisbon().date)return;
+ const valid=v=>Number.isFinite(v.latitude)&&Number.isFinite(v.longitude);
+ const points=[...gpsVehicles.filter(valid),...estimatedVehicles.filter(valid)]
+  .map(v=>[v.latitude,v.longitude]);
+ if(!points.length)return;
+ didInitialAutoFit=true;
+ map.invalidateSize();
+ const bounds=L.latLngBounds(points);
+ if(bounds.isValid())map.fitBounds(bounds.pad(.12),{animate:false,maxZoom:8});
+}
+function serviceDayWarning(){
+ const clock=currentLisbon();
+ if(data?.date===clock.date){
+  dom.serviceDayNotice.textContent="Horários do dia "+clock.date+
+    (previousDayData?" · inclui comboios da véspera que chegam após a meia-noite":"");
+ }else{
+  dom.serviceDayNotice.textContent="Atenção: data selecionada "+(data?.date??"indisponível")+
+   "; hoje é "+clock.date+". As estimativas atuais só aparecem com o GTFS de hoje.";
+ }
+}
 async function loadDay(date){
+ const request=++dayRequestSeq;
  setMessage("A ler horários CP…");
  try{
-  data=await fetchJson(date+".json");
+  const today=currentLisbon().date;
+  const payload=await fetchJson(date+".json");
+  let previousDay=null;
+  const prevDate=previousServiceDate(date);
+  if(date===today&&manifest?.days?.some(d=>d.date===prevDate)){
+   try{previousDay=await fetchJson(prevDate+".json")}
+   catch(e){console.warn("GTFS da véspera indisponível:",e?.message)}
+  }
+  if(request!==dayRequestSeq)return;
+  data=payload;
+  previousDayData=previousDay;
   if(data.realtime!==false||data.gps!==false)throw Error("Tipo de dados inesperado");
   if(coverageDate!==data.date){operationalQueries.clear();coverageDate=data.date;}
   dom.freshness.textContent="GTFS importado: "+new Date(data.generatedAt).toLocaleString("pt-PT");
+  serviceDayWarning();
   renderStations();renderTrains();refreshUnified();map.invalidateSize();
- }catch(e){setMessage("Horários indisponíveis: "+e.message);dom.trains.innerHTML="<p class='empty'>A importação GTFS tem de terminar com sucesso no GitHub Actions.</p>";}
+ }catch(e){
+  if(request!==dayRequestSeq)return;
+  setMessage("Horários indisponíveis: "+e.message);
+  dom.trains.innerHTML="<p class='empty'>A importação GTFS tem de terminar com sucesso.</p>";
+ }
 }
 async function load(){
  setMessage("A consultar índice oficial…");
  try{
   manifest=await fetchJson("manifest.json");
   if(!manifest?.days?.length||manifest.realtime!==false)throw Error("Índice GTFS inválido");
-  dom.day.innerHTML=manifest.days.map(d=>`<option value="${safeText(d.date)}">${safeText(d.date)} · ${d.trains} comboios</option>`).join("");
+  dom.day.innerHTML=manifest.days.map(d=>'<option value="'+safeText(d.date)+'">'+
+   safeText(d.date)+' · '+d.trains+' comboios</option>').join("");
+  const today=currentLisbon().date;
+  const wanted=manualDateSelection?dom.day.value:today;
+  if(manifest.days.some(d=>d.date===wanted))dom.day.value=wanted;
+  else{
+   const available=manifest.days.map(d=>d.date).filter(d=>d<=today);
+   dom.day.value=available.at(-1)??manifest.days[0].date;
+  }
   await loadDay(dom.day.value);
- }catch(e){setMessage("Não foi possível obter a base CP: "+e.message);dom.trains.innerHTML="<p class='empty'>Sem base GTFS importada. Compila o projeto através do workflow da versão 2.0.</p>";}
+ }catch(e){
+  setMessage("Não foi possível obter a base CP: "+e.message);
+  dom.trains.innerHTML="<p class='empty'>Sem base GTFS importada. É necessária uma importação atualizada.</p>";
+ }
 }
+function checkServiceDayRollover(){
+ const today=currentLisbon().date;
+ if(today===lastLocalServiceDate)return;
+ lastLocalServiceDate=today;
+ if(!manualDateSelection&&manifest?.days?.some(d=>d.date===today)){
+  didInitialAutoFit=false;
+  dom.day.value=today;
+  loadDay(today);
+ }else{
+  serviceDayWarning();
+ }
+}
+
 dom.q.addEventListener("input",()=>{listLimit=PAGE_SIZE;renderTrains();renderGps();renderEstimates()});
 dom.day.addEventListener("change",()=>{manualDateSelection=true;listLimit=PAGE_SIZE;loadDay(dom.day.value)});
 dom.reload.onclick=()=>{didInitialAutoFit=false;load();loadGps();cpAutoLastBatch=0};
@@ -581,3 +645,5 @@ setInterval(loadGps,30000);
 
 setInterval(refreshEstimates,30000);
 setInterval(limitedCpNationalRefresh,5*60*1000);
+
+setInterval(checkServiceDayRollover,30000);
