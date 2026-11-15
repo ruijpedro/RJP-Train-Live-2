@@ -9,8 +9,11 @@ import {filterCatalogue,pageCatalogue,PAGE_SIZE,cpLookupNumber,sampleCpByType} f
 import {coverageAudit} from "./coverage-audit.js";
 import {gpsIndicator,GPS_MAX_AGE_MS} from "./gps-indicator.js";
 import {buildEstimatedPositions,currentLisbon,previousServiceDate} from "./estimated-positions.js";
+import {REMOTE_CP_GTFS,usableManifest} from "./gtfs-sync.js";
 
 const BASE = import.meta.env.BASE_URL;
+const LOCAL_CP_BASE=BASE+"data/cp/";
+let cpSourceBase=LOCAL_CP_BASE,cpSourceLabel="APK";
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
 const COLORS = {U:"#3b82f6",R:"#22c55e",IR:"#a78bfa",IC:"#fb923c",AP:"#fb7185",SUD:"#2dd4bf",CP:"#94a3b8",FT:"#06b6d4"};
 const el = document.getElementById("app");
@@ -537,13 +540,22 @@ function renderTrains(){
  renderGps();
  renderEstimates();
 }
-async function fetchJson(path){
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+async function fetchSourceJson(base,path,timeoutMs=16000){
+ const url=base+path;
+ if(base===REMOTE_CP_GTFS)return fetchRemoteJson(url,{timeoutMs});
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
  try{
-  const r=await fetch(BASE+"data/cp/"+path,{cache:"no-store",signal:controller.signal});
+  const r=await fetch(url,{cache:"no-store",signal:controller.signal});
   if(!r.ok)throw Error("HTTP "+r.status+" em "+path);
   return await r.json();
- }finally{clearTimeout(timer);}
+ }finally{clearTimeout(timer)}
+}
+async function fetchJson(path){
+ if(cpSourceBase===REMOTE_CP_GTFS){
+  try{return await fetchSourceJson(REMOTE_CP_GTFS,path)}
+  catch(e){console.warn("GTFS remoto indisponível, a tentar dados locais:",e?.message)}
+ }
+ return fetchSourceJson(LOCAL_CP_BASE,path);
 }
 
 // Only fit when BOTH today's GTFS and TML response have been considered.
@@ -586,7 +598,7 @@ async function loadDay(date){
   previousDayData=previousDay;
   if(data.realtime!==false||data.gps!==false)throw Error("Tipo de dados inesperado");
   if(coverageDate!==data.date){operationalQueries.clear();coverageDate=data.date;}
-  dom.freshness.textContent="GTFS importado: "+new Date(data.generatedAt).toLocaleString("pt-PT");
+  dom.freshness.textContent="GTFS CP "+cpSourceLabel+" · atualizado: "+new Date(data.generatedAt).toLocaleString("pt-PT");
   serviceDayWarning();
   renderStations();renderTrains();refreshUnified();map.invalidateSize();
  }catch(e){
@@ -598,11 +610,18 @@ async function loadDay(date){
 async function load(){
  setMessage("A consultar índice oficial…");
  try{
-  manifest=await fetchJson("manifest.json");
-  if(!manifest?.days?.length||manifest.realtime!==false)throw Error("Índice GTFS inválido");
+  cpSourceBase=LOCAL_CP_BASE;cpSourceLabel="APK";manifest=null;
+  const today=currentLisbon().date;
+  try{
+   const online=await fetchSourceJson(REMOTE_CP_GTFS,"manifest.json",6500);
+   if(usableManifest(online,{date:today})){
+    manifest=online;cpSourceBase=REMOTE_CP_GTFS;cpSourceLabel="online (atualização independente)";
+   }
+  }catch(e){console.warn("GTFS CP online não disponível, a usar o pacote da APK:",e?.message)}
+  if(!manifest)manifest=await fetchSourceJson(LOCAL_CP_BASE,"manifest.json");
+  if(!manifest?.days?.length||manifest.realtime!==false||manifest.gps!==false)throw Error("Índice GTFS inválido");
   dom.day.innerHTML=manifest.days.map(d=>'<option value="'+safeText(d.date)+'">'+
    safeText(d.date)+' · '+d.trains+' comboios</option>').join("");
-  const today=currentLisbon().date;
   const wanted=manualDateSelection?dom.day.value:today;
   if(manifest.days.some(d=>d.date===wanted))dom.day.value=wanted;
   else{
