@@ -1,0 +1,56 @@
+name: Train Live 2 — publicar horários CP para a APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-gtfs.yml
+  schedule:
+    # The CP GTFS can change; keep a rolling 7-day horizon plus yesterday.
+    - cron: '17 04,16 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: train-live-2-public-gtfs
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Atualizar GTFS CP independente (não mexe na Trains original)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Importar dados oficiais CP (+ véspera, 7 dias)
+        run: |
+          set -euo pipefail
+          python3 scripts/import_gtfs.py --days 7 --include-yesterday --dest /tmp/rjp-train-gtfs
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("/tmp/rjp-train-gtfs")
+          manifest=json.loads((root/"manifest.json").read_text())
+          assert len(manifest["days"])==8 and manifest["gps"] is False and manifest["realtime"] is False
+          for day in manifest["days"]:
+              payload=json.loads((root/day["file"]).read_text())
+              assert payload["date"]==day["date"] and payload["trains"] and payload["gps"] is False
+          print("GTFS validado:",manifest["generatedAt"],len(manifest["days"]),"dias")
+          PY
+      - name: Publicar em ramo isolado (apenas JSON GTFS, nunca código da app)
+        run: |
+          set -euo pipefail
+          git config user.name "RJP Train Live 2 GTFS Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan rjp-train-2-gtfs-live
+          git rm -rq --cached . || true
+          mkdir -p data/cp
+          cp -f /tmp/rjp-train-gtfs/*.json data/cp/
+          git add -f data/cp/*.json
+          git commit -m "CP GTFS nacional atualizado: $(date -u +%Y-%m-%dT%H:%MZ)"
+          # Isolated data branch is rewritten to avoid accumulating 20MB per day.
+          git push --force origin HEAD:refs/heads/rjp-train-2-gtfs-live
