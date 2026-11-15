@@ -84,7 +84,7 @@ def time_minutes(t):
         return -1
 
 
-def import_feed(source, dest, days, today):
+def import_feed(source, dest, days, today, include_yesterday=False):
     request = urllib.request.Request(source, headers={"User-Agent": "RJP-Train-Live-2/0.1 (+GTFS)"})
     with urllib.request.urlopen(request, timeout=75) as res:
         raw = res.read(70_000_001)
@@ -112,7 +112,9 @@ def import_feed(source, dest, days, today):
     dest.mkdir(parents=True, exist_ok=True)
     now = datetime.now(LISBON).isoformat(timespec="seconds")
     dates = []
-    for offset in range(days):
+    # The -1 service date is needed for trains still moving after midnight
+    # with GTFS arrival times 24:xx / 25:xx.
+    for offset in range(-1 if include_yesterday else 0, days):
         date = today + timedelta(days=offset)
         active = service_ids(date, calendars, exceptions)
         candidates = []
@@ -183,9 +185,11 @@ if __name__ == "__main__":
     parser.add_argument("--source", default=DEFAULT_URL)
     parser.add_argument("--dest", default="public/data/cp")
     parser.add_argument("--days", type=int, default=3)
+    parser.add_argument("--include-yesterday", action="store_true",
+                        help="Import previous day's overnight services in addition to N upcoming days")
     parser.add_argument("--date", default=None, help="Override start date YYYY-MM-DD for tests")
     args = parser.parse_args()
     if not 1 <= args.days <= 7:
         parser.error("--days must be between 1 and 7")
     day = datetime.fromisoformat(args.date).date() if args.date else datetime.now(LISBON).date()
-    import_feed(args.source, args.dest, args.days, day)
+    import_feed(args.source, args.dest, args.days, day, include_yesterday=args.include_yesterday)

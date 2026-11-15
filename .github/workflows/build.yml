@@ -27,13 +27,13 @@ jobs:
           assert type_from_route({"route_long_name":"Linha de Aveiro"}) == "U"
           assert type_from_route({"route_long_name":"Linha do Oeste", "route_short_name":"R"}) == "R"
           PY
-          python3 scripts/import_gtfs.py --days 7
+          python3 scripts/import_gtfs.py --days 7 --include-yesterday
           python3 - <<'PY'
           import json
           from pathlib import Path
           root=Path("public/data/cp")
           m=json.loads((root/"manifest.json").read_text())
-          assert len(m["days"])==7 and m["realtime"] is False and m["gps"] is False
+          assert len(m["days"])==8 and m["realtime"] is False and m["gps"] is False
           for day in m["days"]:
               data=json.loads((root/day["file"]).read_text())
               assert data["trains"] and data["stations"]
