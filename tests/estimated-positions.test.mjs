@@ -52,3 +52,30 @@ test("missing coordinates do not generate estimate",()=>{
  const x=structuredClone(train);x.stops.forEach(s=>s.location=null);
  assert.equal(estimateTrain(x,{date:day,now:at("12:10:00")}),null);
 });
+
+test("previous-day trips with GTFS times 24:xx remain visible after midnight",()=>{
+ const past={...train,number:"529",id:"overnight-529",stops:[
+  {id:"a",name:"A",arrival:"23:45:00",departure:"23:45:00",location:[40,-8]},
+  {id:"b",name:"B",arrival:"24:30:00",departure:"24:30:00",location:[40.3,-8.3]},
+  {id:"c",name:"C",arrival:"25:25:00",departure:"25:25:00",location:[40.5,-8.5]}
+ ]};
+ const midnight=Date.parse("2026-11-15T00:15:00Z");
+ const p=estimateTrain(past,{date:"2026-11-14",now:midnight});
+ assert.ok(p);assert.equal(p.date,"2026-11-14");assert.equal(p.isGps,false);
+ assert.ok(p.latitude>40&&p.latitude<40.3);
+ const both=buildEstimatedPositions({date:"2026-11-15",now:midnight,
+  trains:[],previousDay:{date:"2026-11-14",trains:[past]}});
+ assert.equal(both.length,1);
+});
+test("previous day not displayed outside overnight window",()=>{
+ const past={...train,number:"529",stops:[
+  {name:"A",departure:"23:45:00",arrival:"23:45:00",location:[40,-8]},
+  {name:"B",departure:"24:30:00",arrival:"24:30:00",location:[40.3,-8.3]}
+ ]};
+ assert.equal(estimateTrain(past,{date:"2026-11-14",now:Date.parse("2026-11-15T08:00:00Z")}),null);
+});
+test("forecast for yesterday is not shown just because yesterday remains selected",()=>{
+ const out=buildEstimatedPositions({date:"2026-11-14",now:Date.parse("2026-11-15T00:30:00Z"),
+  trains:[train]});
+ assert.deepEqual(out,[]);
+});

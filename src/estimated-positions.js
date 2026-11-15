@@ -20,6 +20,13 @@ export function currentLisbon(now=Date.now()){
  const o=Object.fromEntries(parts.filter(p=>p.type!=="literal").map(p=>[p.type,p.value]));
  return {date:o.year+"-"+o.month+"-"+o.day,minutes:+o.hour*60+(+o.minute)};
 }
+export function previousServiceDate(today){
+ const value=String(today??"");
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;
+ const d=new Date(value+"T12:00:00Z");
+ if(!Number.isFinite(d.getTime()))return null;
+ return new Date(d.getTime()-86400000).toISOString().slice(0,10);
+}
 export function interpolateCoords(start,end,fraction){
  return [start[0]+(end[0]-start[0])*fraction,start[1]+(end[1]-start[1])*fraction];
 }
@@ -67,7 +74,11 @@ function timetablePosition(stops,effective){
 export function estimateTrain(train,{date,now=Date.now(),cp=null,cpQueriedAt=null}={}){
  if(!train||!Array.isArray(train.stops)||train.stops.length<2||!number(train.number))return null;
  const clock=currentLisbon(now);
- if(date!==clock.date)return null;
+ // A trip starting yesterday may still be running after 00:00 with GTFS
+ // stop_times 24:xx / 25:xx. Never show unrelated historic or future dates.
+ const today=date===clock.date,overnight=date===previousServiceDate(clock.date);
+ if(!today&&!overnight)return null;
+ const minutes=clock.minutes+(overnight?1440:0);
  const stops=train.stops;
  const first=timeMinutes(stops[0].departure??stops[0].arrival);
  const last=timeMinutes(stops.at(-1).arrival??stops.at(-1).departure);
@@ -77,11 +88,11 @@ export function estimateTrain(train,{date,now=Date.now(),cp=null,cpQueriedAt=nul
  const status=fresh?number(cp.status).toUpperCase():null;
  if(status&&TERM.has(status))return null;
  const delay=fresh&&Number.isFinite(cp?.delayMinutes)?Math.max(0,Math.min(cp.delayMinutes,180)):0;
- const progressTime=clock.minutes-delay;
+ const progressTime=minutes-delay;
  // Outside timetable: only a fresh CP 'in transit' observation can extend
  // a journey up to 60 minutes, never assert it is actually moving from GTFS.
- if(clock.minutes<first-2)return null;
- if(clock.minutes>last+(status==="IN_TRANSIT"?60:0)+delay)return null;
+ if(minutes<first-2)return null;
+ if(minutes>last+(status==="IN_TRANSIT"?60:0)+delay)return null;
  const cpi=fresh?anchorFor(stops,cp):-1;
  if(fresh&&cpi>=0&&(status==="AT_STATION"||status==="AT_ORIGIN"||status==="NEAR_NEXT")&&validGeo(stops[cpi].location)){
   const s=stops[cpi];
@@ -103,7 +114,7 @@ export function estimateTrain(train,{date,now=Date.now(),cp=null,cpQueriedAt=nul
    });
   }
  }
- if(clock.minutes>last+delay||progressTime<first)return null;
+ if(minutes>last+delay||progressTime<first)return null;
  const where=timetablePosition(stops,progressTime);
  if(!where)return null;
  return baseResult(train,date,where.point,{
@@ -114,26 +125,34 @@ export function estimateTrain(train,{date,now=Date.now(),cp=null,cpQueriedAt=nul
   cpDelayMinutes:fresh?cp.delayMinutes:null,lastCpStation:fresh?cp.lastReportedStation:null
  });
 }
-export function buildEstimatedPositions({trains=[],date,now=Date.now(),queries=[],gpsVehicles=[]}={}){
- const gps=new Set(gpsVehicles.filter(v=>v.agency==="N18KL"&&number(v.trainNumber)).map(v=>number(v.trainNumber)));
+export function buildEstimatedPositions({trains=[],date,previousDay=null,now=Date.now(),queries=[],gpsVehicles=[]}={}){
+ const clock=currentLisbon(now);
+ // No forecast for dates other than today and immediately previous service day.
+ if(date!==clock.date)return [];
+ const realGps=new Set(gpsVehicles
+  .filter(v=>v.agency==="N18KL"&&number(v.trainNumber))
+  .map(v=>number(v.trainNumber)));
  const latest=new Map();
  for(const q of queries){
-  if(q?.date===date&&q.number&&q.success&&q.result)
-   latest.set(number(q.number),q);
-  else if(q?.date===date&&q.number&&q.success===false)
-   latest.set(number(q.number),q);
+  if(q?.date===date&&q.number)latest.set(number(q.number),q);
  }
- const output=[],used=new Set();
- for(const train of trains){
-  const id=number(train?.number);
-  const key=number(train?.id)||id;
-  if(!id||used.has(key)||gps.has(id))continue;
-  used.add(key);
-  const q=latest.get(id);
-  // Stale/failed CP lookup must not suppress a scheduled estimate; it is
-  // correctly labelled "GTFS only".
-  const pos=estimateTrain(train,{date,now,cp:q?.success?q.result:null,cpQueriedAt:q?.result?.obtainedAt});
-  if(pos)output.push(pos);
+ const out=[],seen=new Set();
+ const sources=[{date,trains},...(
+  previousDay?.date===previousServiceDate(date)&&Array.isArray(previousDay?.trains)
+   ?[{date:previousDay.date,trains:previousDay.trains}]:[])];
+ for(const source of sources){
+  for(const train of source.trains){
+   const id=number(train?.number);
+   const key=source.date+":"+number(train?.id||id);
+   if(!id||seen.has(key)||realGps.has(id))continue;
+   seen.add(key);
+   // CP status reports for today are not applied to yesterday's service
+   // because identical numeric train ids may be reused across dates.
+   const q=source.date===date?latest.get(id):null;
+   const pos=estimateTrain(train,{date:source.date,now,
+    cp:q?.success?q.result:null,cpQueriedAt:q?.result?.obtainedAt});
+   if(pos)out.push(pos);
+  }
  }
- return output;
+ return out;
 }
