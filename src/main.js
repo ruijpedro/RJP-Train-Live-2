@@ -846,6 +846,9 @@ const editableAlerts=installEditableAlertUI({
  getCatalogue:()=>data?.trains??[],
  getDate:()=>data?.date??null,
  requestPermission:authorizeLocalAlerts,
+ canNotify:async()=>Capacitor.isNativePlatform()?
+  (await LocalNotifications.checkPermissions()).display==="granted":
+  (typeof Notification!=="undefined"&&Notification.permission==="granted"),
  notify:showLocalAlert
 });
 const otaCheck=document.getElementById("rjpOtaCheck");

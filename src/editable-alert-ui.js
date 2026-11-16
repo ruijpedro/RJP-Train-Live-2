@@ -1,6 +1,6 @@
 import {loadAlerts,saveAlerts,upsertAlert,validateAlert,alertCandidates,filterUnsent} from "./editable-alerts.js";
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-export function installEditableAlertUI({getCatalogue=()=>[],getDate=()=>null,requestPermission=async()=>false,notify=async()=>false}={}){
+export function installEditableAlertUI({getCatalogue=()=>[],getDate=()=>null,requestPermission=async()=>false,canNotify=async()=>false,notify=async()=>false}={}){
  const by=id=>document.getElementById(id);
  const overlay=by("rjpAlertsOverlay"),form=by("rjpAlertForm"),list=by("rjpAlertRules"),state=by("rjpAlertStatus");
  let rules=loadAlerts();
@@ -96,10 +96,14 @@ export function installEditableAlertUI({getCatalogue=()=>[],getDate=()=>null,req
  by("rjpAlertTest").onclick=async()=>{try{
   message(await notify({number:"TESTE",station:"RJP Train Live",event:"arrival",time:"agora"})?"Notificação de teste enviada.":"Não foi possível apresentar a notificação. Verifica as permissões.");
  }catch(e){message("Falha no teste: "+e.message)}};
- function poll(){
-  const matches=alertCandidates(getCatalogue(),rules,{date:getDate(),now:Date.now()});
-  const unique=filterUnsent(matches);
-  unique.forEach(item=>notify(item).catch(e=>console.warn("Alerta beta:",e)));
+ async function poll(){
+  try{
+   // Don't consume/deduplicate an alert until notification permissions exist.
+   if(!(await canNotify()))return;
+   const matches=alertCandidates(getCatalogue(),rules,{date:getDate(),now:Date.now()});
+   const unique=filterUnsent(matches);
+   for(const item of unique)await notify(item).catch(e=>console.warn("Alerta beta:",e));
+  }catch(e){console.warn("Não foi possível verificar alertas beta:",e)}
  }
  render();reset();
  return {poll,open,close,render,count:()=>rules.length};

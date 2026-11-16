@@ -101,3 +101,7 @@
  .rjpAlertForm fieldset,.rjpAlertForm .rjpWide{grid-column:1}
  .rjpAlertRule{align-items:flex-start;flex-direction:column}
 }
+
+/* Leaflet requires a real height on every nested map container. */
+#rjpMapSlot{height:100%;width:100%;min-height:0}
+@media(max-width:850px){#rjpMapSlot{height:59dvh;min-height:410px}}
