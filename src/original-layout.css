@@ -105,3 +105,48 @@
 /* Leaflet requires a real height on every nested map container. */
 #rjpMapSlot{height:100%;width:100%;min-height:0}
 @media(max-width:850px){#rjpMapSlot{height:59dvh;min-height:410px}}
+
+
+/* 2.0.12 visual parity pass:
+   exact mobile rhythm of the stable Train Live while keeping source evidence.
+   A selected service button can be tapped again to restore all categories. */
+.rjpOriginalShell .originalTypeFilters .type[data-type="ALL"],
+.rjpOriginalShell .originalTypeFilters .type[data-type="CP"]{display:none}
+.rjpOriginalShell .originalTypeFilters .type.active{background:#137bc6;border-color:#c8e9ff;color:white;opacity:1}
+.rjpOriginalShell .originalTypeFilters .type:not(.active){background:#177ec9;opacity:1;color:#fff}
+.rjpOriginalShell .estimateMarker.cpAnchor{
+ background:var(--service-color,#94a3b8);color:#fff;border:2px dashed #d7b4ff;
+}
+.rjpOriginalShell .estimateMarker.scheduleOnly{
+ background:var(--service-color,#94a3b8);color:#fff;border:2px dashed #ffe09c;
+}
+.rjpOriginalShell .estimatedRow .estimateSymbol{
+ background:var(--service-color,#94a3b8);color:#fff
+}
+.rjpOriginalShell .estimatedRow.timetable .estimateSymbol{
+ background:var(--service-color,#94a3b8);color:#fff
+}
+@media(max-width:850px){
+ .rjpOriginalShell .rjpTop{padding:11px 13px 9px}
+ .rjpOriginalShell .rjpBrandGroup h1{font-size:18px;letter-spacing:.028em}
+ .rjpOriginalShell .rjpBrandGroup h1 small{font-size:10px}
+ .rjpOriginalShell .rjpToolbar{
+   display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+   align-items:stretch;gap:8px 10px;padding:9px 10px 11px;
+ }
+ .rjpOriginalShell .rjpToolbar #rjpSearchSlot{grid-column:1/-1;min-width:0}
+ .rjpOriginalShell .rjpToolbar #rjpReloadSlot{grid-column:1;min-width:0}
+ .rjpOriginalShell .rjpToolbar #reload{width:100%}
+ .rjpOriginalShell .rjpToolbar #rjpAlertOpen{grid-column:2;width:100%;min-width:0}
+ .rjpOriginalShell .rjpToolbar #rjpOtaCheck{grid-column:1;justify-self:start}
+ .rjpOriginalShell .rjpToolbar #rjpInfoToggle{display:none}
+ .rjpOriginalShell .originalTypeFilters{
+   display:grid;grid-template-columns:repeat(7,minmax(0,1fr));
+   gap:5px;padding:9px 11px;overflow:visible
+ }
+ .rjpOriginalShell .originalTypeFilters .type{
+   min-width:0;width:100%;padding:10px 0;border-radius:10px;
+   font-size:12px;line-height:1.2;text-align:center
+ }
+ .rjpOriginalShell .rjpOverview>div{padding:8px 9px}
+}

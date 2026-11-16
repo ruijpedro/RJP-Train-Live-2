@@ -107,7 +107,7 @@ function sameLocation(p){return Array.isArray(p)&&p.length===2&&p.every(Number.i
 function setMessage(msg){dom.count.textContent=msg;}
 function renderTypes(){
  dom.types.innerHTML=["ALL",...TYPES].map(t=>`<button class="type ${selected===t?"active":""}" data-type="${t}" style="--type-color:${COLORS[t]||"#38bdf8"}">${t==="ALL"?"Todos":t}</button>`).join("");
- dom.types.querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=b.dataset.type;listLimit=PAGE_SIZE;renderTypes();renderTrains();renderGps();renderEstimates();renderRuiFallback();});
+ dom.types.querySelectorAll("button").forEach(b=>b.onclick=()=>{const choice=b.dataset.type;selected=selected===choice?"ALL":choice;listLimit=PAGE_SIZE;renderTypes();renderTrains();renderGps();renderEstimates();renderRuiFallback();});
 }
 
 function focusGpsMarkers(){
@@ -184,8 +184,9 @@ function estimatedDetails(v){
 }
 function estimatedIcon(v){
  const anchored=v.level==="cp-anchored";
+ const serviceColor=COLORS[v.type]||COLORS.CP;
  return L.divIcon({className:"estimateIcon",html:'<span class="estimateMarker '+(anchored?"cpAnchor":"scheduleOnly")+
-  '" title="NÃO GPS">≈<small>'+safeText(v.type)+'</small></span>',
+  '" style="--service-color:'+serviceColor+'" title="Estimativa NÃO GPS: '+safeText(v.type)+'">≈<small>'+safeText(v.type)+'</small></span>',
   iconSize:[34,34],iconAnchor:[17,17]});
 }
 function renderEstimates(){
@@ -204,7 +205,7 @@ function renderEstimates(){
  dom.estimatedTrains.innerHTML=visible.length?
   visible.slice(0,120).map((v,i)=>
    '<button type="button" class="train estimatedRow '+safeText(v.level)+'" data-est-index="'+i+'">'+
-   '<span class="estimateSymbol">≈</span><span class="trainInfo">'+
+   '<span class="estimateSymbol" style="--service-color:'+(COLORS[v.type]||COLORS.CP)+'">≈</span><span class="trainInfo">'+
    '<strong>'+safeText(v.type+" "+v.number)+'</strong>'+
    '<small>'+safeText(v.origin+" → "+v.destination)+'</small>'+
    estimatedBadge(v)+'<small>Entre '+safeText((v.fromStation??"—")+" e "+(v.toStation??"—"))+'</small>'+
