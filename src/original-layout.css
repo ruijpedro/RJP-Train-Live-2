@@ -150,3 +150,56 @@
  }
  .rjpOriginalShell .rjpOverview>div{padding:8px 9px}
 }
+
+
+/* Original RJP Train Live dark train detail card, on all map markers. */
+.rjpOriginalShell .rjpTrainDialog{background:#102a43;color:#eef7ff;border:1px solid #3c6077;
+ box-shadow:0 15px 60px #0009;border-radius:18px;width:min(620px,100%);padding:20px}
+.rjpOriginalShell #rjpTrainClose{position:sticky;top:0;float:right;background:#294b68;border-radius:12px;
+ width:46px;height:46px;z-index:5;font-weight:800;font-size:30px;line-height:1}
+.rjpTrainDetails{padding:0 2px;color:#eaf4ff}
+.rjpTrainHeader{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.rjpTrainNumber{display:flex;align-items:center;gap:12px;min-width:0}
+.rjpTrainNumber img{height:36px;width:36px;object-fit:contain;border-radius:7px}
+.rjpTrainNumber h2{margin:0;font-size:26px;color:#fff}
+.rjpTrainEvidence{display:inline-flex;border-radius:14px;padding:5px 9px;font-size:10px;font-weight:800;
+ border:1px dashed #e3c881;letter-spacing:.025em}
+.rjpTrainEvidence.real{border-style:solid;background:#125345;border-color:#69d7a9;color:#e9fff5}
+.rjpTrainEvidence.estimated{background:#4b365d;border-color:#d0aeef;color:#fff2fc}
+.rjpTrainEvidence.backup{background:#523b2c;border-color:#e7a875;color:#ffe4bd}
+.rjpTrainEvidence.scheduled{background:#274158;border-color:#86b6d8;color:#d6ecff}
+.rjpTrainJourney{font-size:18px;margin:22px 0;font-weight:700;line-height:1.4}
+.rjpTrainJourney span{color:#8dafc7;padding:0 3px}
+.rjpTrainDelay{font-size:18px;margin:13px 0}
+.rjpTrainDelay strong{color:#ffa08b;font-weight:850}
+.rjpTrainDelay strong.unknown{color:#b3c8d5}
+.rjpTrainDelay small{font-size:11px;color:#c1d3df;display:block;margin-top:3px}
+.rjpTrainFacts{font-size:15px;margin:13px 0;line-height:1.45}
+.rjpTrainFacts b{font-weight:760}
+.rjpEtaSection{border:1px solid #436d86;border-radius:14px;padding:15px;margin:23px 0 20px;
+ background:#102d45}
+.rjpEtaSection h3{font-size:19px;color:#eff9ff;margin:0 0 12px}
+.rjpEtaIntro{font-size:12px;line-height:1.45;color:#bad0e0;margin:9px 0}
+.rjpEtaList{max-height:min(44dvh,390px);overflow-y:auto;padding-right:3px;scrollbar-color:#58758a #11283c}
+.rjpEtaStop{background:#0b2034;border-radius:11px;padding:13px 12px;margin:8px 0;
+ display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+.rjpEtaStop.upcoming{outline:1px solid #64badb}
+.rjpEtaStop.passed{outline:1px solid #498c76}
+.rjpEtaStation b{display:block;font-size:13px}
+.rjpEtaStation small{font-size:11px;color:#a4bfd2;display:block;margin-top:8px}
+.rjpEtaHours{text-align:right;white-space:nowrap;display:flex;flex-direction:column;gap:4px;font-size:12px}
+.rjpEtaHours strong{color:#8fdbf1}
+.rjpEtaUnavailable{font-size:13px;color:#acccdd}
+.rjpSourceDetails{border-top:1px solid #305a74;padding-top:13px;color:#c9dce9;font-size:13px;line-height:1.5}
+.rjpSourceDetails strong{color:#fff}
+.rjpSourceDetails .rjpCpDetailStatus{font-size:11px;color:#a5c8db}
+.rjpSourceDetails details{border-top:1px solid #345d71;padding-top:10px;margin-top:12px}
+.rjpSourceDetails summary{color:#a8dafa;font-weight:bold;cursor:pointer}
+@media(max-width:850px){
+ .rjpOriginalShell .rjpTrainDialog{padding:13px;max-height:calc(100dvh - 20px)}
+ .rjpTrainJourney{font-size:17px;margin:18px 0}
+ .rjpTrainEvidence{font-size:9px}
+ .rjpEtaSection{padding:11px}
+ .rjpEtaList{max-height:42dvh}
+ .rjpEtaStop{padding:12px 9px}
+}

@@ -21,8 +21,10 @@ const findReported=(rows,s,index)=>{
  return null;
 };
 export function detailStopTimes(train,cp){
- const stops=Array.isArray(train?.stops)?train.stops:[];
  const cpRows=Array.isArray(cp?.stops)?cp.stops:[];
+ const stops=Array.isArray(train?.stops)&&train.stops.length?train.stops:
+  cpRows.map(s=>({name:s.station,id:s.stationCode,arrival:s.scheduledArrival,
+   departure:s.scheduledDeparture}));
  const delay=Number.isFinite(cp?.delayMinutes)?cp.delayMinutes:null;
  return stops.map((s,i)=>{
   const report=findReported(cpRows,s,i);

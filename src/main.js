@@ -15,6 +15,7 @@ import {coverageAudit} from "./coverage-audit.js";
 import {gpsIndicator,GPS_MAX_AGE_MS} from "./gps-indicator.js";
 import {buildEstimatedPositions,currentLisbon,previousServiceDate} from "./estimated-positions.js";
 import {REMOTE_CP_GTFS,usableManifest} from "./gtfs-sync.js";
+import {detailStopTimes,detailStopProgress,detailStatusText,detailServiceLabel,detailKindSource} from "./train-detail.js";
 import {RUI_DIRECT_URL,RUI_WORKER_RELAY,shouldUseRuiFallback,normalizeRuiFallback} from "./rui-fallback.js";
 
 const BASE = import.meta.env.BASE_URL;
@@ -26,7 +27,7 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.12-beta.1 · visual original e alertas editáveis</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.13-beta.1 · ficha de comboio e ETA</small></div>
 </header>
 <div class="sourceNote"><strong>GPS real e estimativas nacionais</strong><span>Marcadores cheios: coordenadas reais TML. Marcadores ≈ tracejados: NÃO GPS. Roxo: estimativa ancorada na última estação CP; âmbar: previsão só pelo horário GTFS. As estimativas podem afastar-se muito da localização real.</span></div>
 <div class="controls">
@@ -71,7 +72,7 @@ el.innerHTML = `
 </div>
 <footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. GPS TML (máx. 3 minutos) é distinto das estimativas CP + GTFS ou só GTFS. Estimativas não são localizações exatas nem confirmação de circulação. Não utilizar para segurança da exploração.</footer>
 `;
-installOriginalLayout({version:"2.0.12-beta.1",base:BASE});
+installOriginalLayout({version:"2.0.13-beta.1",base:BASE});
 
 const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote","sampleNational","sampleResult","focusEstimated","showCpEstimates","showScheduleEstimates","estimatedTrains","estimateStats","cpAutoStatus","showStations","mapTotals","serviceDayNotice","ruiFallbackStatus","ruiFallbackSection","ruiFallbackTrains"].map(id=>[id,document.getElementById(id)]));
 let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),estimatedMarkers=L.layerGroup(),ruiMarkers=L.layerGroup(),gpsVehicles=[],estimatedVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null,cpAutoBusy=false,cpAutoLastBatch=0,cpConfigCache=null,cpConfigCachedAt=0,previousDayData=null,didInitialAutoFit=false,manualDateSelection=false,dayRequestSeq=0,lastLocalServiceDate=currentLisbon().date,
@@ -128,6 +129,141 @@ function gpsIcon(type){
  const color=COLORS[type]||COLORS.CP;
  return L.divIcon({className:"gpsMarkerIcon",html:'<span class="gpsMarker" style="--color:'+color+'">'+safeText(type)+'</span>',iconSize:[34,34],iconAnchor:[17,17]});
 }
+
+// Original-style dark modal for EVERY map marker. The GPS/estimate source remains
+// prominent. CP status is requested on tap, not guessed from a scheduled train.
+let detailDialogSequence=0;
+function findCatalogueJourney(kind,v){
+ if(kind==="scheduled")return v;
+ const number=String(kind==="gps"?(v.trainNumber??""):v.number??"");
+ const dated=kind==="estimated"&&v.date!==data?.date?previousDayData:data;
+ const trains=dated?.trains??[];
+ if(kind==="estimated"){
+  return trains.find(t=>String(t.id)===String(v.tripId)&&String(t.number)===number)??null;
+ }
+ return trains.find(t=>String(t.number)===number)??null;
+}
+function sourceTime(ms){
+ const d=new Date(ms);
+ return Number.isFinite(d.getTime())?d.toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):null;
+}
+function trainDetailsMarkup(kind,v,train,cp,{loading=false,error=""}={}){
+ const num=String(kind==="gps"?(v.trainNumber??v.vehicleId??""):v.number??"");
+ const type=train?.type??v.type??"CP";
+ const origin=train?.origin??v.origin??"não indicada";
+ const destination=train?.destination??v.destination??"não indicado";
+ const source=detailKindSource(kind,v.level);
+ const confirmedGps=kind==="gps";
+ const reported=!!cp;
+ const delay=reported&&Number.isFinite(cp.delayMinutes)?cp.delayMinutes:null;
+ const fallbackDelay=kind==="rui"&&Number.isFinite(v.delayMinutes)?v.delayMinutes:null;
+ const delayText=delay!==null?(delay>0?"+"+delay+" min":delay<0?delay+" min":"0 min"):
+  (fallbackDelay!==null?(fallbackDelay>0?"+":"")+fallbackDelay+" min":"Não comunicado");
+ const delayEvidence=delay!==null?"Atraso comunicado pela CP":
+  fallbackDelay!==null?"Atraso indicado por Comboios Live, não confirmado pela CP":"";
+ const stops=detailStopTimes(train,cp);
+ const progress=detailStopProgress(stops,cp);
+ const last=cp?.lastReportedStation??(kind==="rui"?v.lastStation:kind==="estimated"?v.lastCpStation:null);
+ const next=progress.nextIndex!==null?stops[progress.nextIndex]?.name??null:
+  (kind==="rui"?v.nextStation:kind==="estimated"?v.toStation:null);
+ const status=cp?detailStatusText(cp):
+  kind==="gps"?"Posição TML recebida; estado CP não confirmado":
+  kind==="rui"?(v.status??"Estado não confirmado pela CP"):
+  "Circulação não confirmada";
+ const stamp=cp?.obtainedAt?sourceTime(cp.obtainedAt):kind==="gps"?sourceTime(v.timestamp):
+  kind==="rui"?sourceTime(v.checkedAt):sourceTime(v.updatedAt);
+ const badge=confirmedGps?"GPS REAL · TML":kind==="estimated"?
+  "≈ "+(v.level==="cp-anchored"?"ESTIMATIVA CP + GTFS":"PREVISÃO POR HORÁRIO")+" · NÃO GPS":
+  kind==="rui"?"FONTE DE RESERVA · NÃO GPS VERIFICADO":"HORÁRIO PROGRAMADO · NÃO GPS";
+ const evidence=confirmedGps?"real":kind==="rui"?"backup":kind==="estimated"?"estimated":"scheduled";
+ const stateLabel=loading?"A consultar o estado e as paragens diretamente à CP…":
+  error?"Consulta CP indisponível: "+error:
+  reported?"CP consultada às "+(sourceTime(cp.obtainedAt)??"—"):
+  "Sem consulta CP recente.";
+ const current=stops.filter(s=>s.eta!==null).length;
+ const rows=stops.length?stops.slice(0,85).map((s,i)=>{
+  const label=s.etaSource==="cp-reported"?"ETA devolvido pela CP":
+   s.etaSource==="cp-delay"?"Calculado com atraso CP":"Sem ETA operacional";
+  const highlighted=progress.lastIndex===i?" passed":progress.nextIndex===i?" upcoming":"";
+  return '<div class="rjpEtaStop'+highlighted+'"><div class="rjpEtaStation">'+
+   '<b>'+safeText(s.name)+'</b><small>'+safeText(label)+'</small></div>'+
+   '<div class="rjpEtaHours"><span>Horário: '+safeText(s.scheduled??"—")+'</span>'+
+   '<strong>ETA: '+safeText(s.eta??"indisponível")+'</strong></div></div>';
+ }).join(""):'<p class="rjpEtaUnavailable">Sem paragens disponíveis para este comboio.</p>';
+ let positionNote="";
+ if(kind==="estimated"){
+  positionNote='<p>Localização aproximada entre <b>'+safeText(v.fromStation??"—")+
+   '</b> e <b>'+safeText(v.toStation??"—")+'</b>. '+
+   'O cálculo por horário pode afastar-se da via real e não comprova a passagem.</p>';
+ }else if(kind==="gps"){
+  positionNote='<p>Coordenadas recebidas da TML às '+safeText(sourceTime(v.timestamp)??"—")+
+   '; correspondência '+safeText(v.matchMethod??"não indicada")+'.</p>';
+ }else if(kind==="rui"){
+  positionNote='<p>Dados de último recurso, sem validação própria da localização GPS ou da hora original da posição.</p>';
+ }else{
+  positionNote='<p>GTFS corresponde a horários programados; não confirma a circulação ou a localização do veículo.</p>';
+ }
+ return '<div class="rjpTrainDetails"><div class="rjpTrainHeader">'+
+  '<div class="rjpTrainNumber"><img alt="" src="'+safeText(BASE+'icons/icon-192.png')+
+  '"><h2>'+safeText(type+" "+num)+'</h2></div><span class="rjpTrainEvidence '+evidence+'">'+safeText(badge)+'</span></div>'+
+  '<div class="rjpTrainJourney"><strong>'+safeText(origin)+'</strong> <span>→</span> <strong>'+safeText(destination)+'</strong></div>'+
+  '<p class="rjpTrainDelay">Atraso: <strong class="'+(delay!==null||fallbackDelay!==null?"known":"unknown")+'">'+safeText(delayText)+'</strong>'+
+   (delayEvidence?'<small>'+safeText(delayEvidence)+'</small>':"")+'</p>'+
+  '<p class="rjpTrainFacts">Serviço: <b>'+safeText(detailServiceLabel(type))+'</b></p>'+
+  '<p class="rjpTrainFacts">Estado: <b>'+safeText(status)+'</b></p>'+
+  '<p class="rjpTrainFacts">Última estação indicada: <b>'+safeText(last??"Não indicada")+'</b></p>'+
+  '<p class="rjpTrainFacts">Próxima estação: <b>'+safeText(next??"Não confirmada")+'</b></p>'+
+  '<section class="rjpEtaSection"><h3>🕒 Chegadas estimadas (ETA)</h3>'+
+  '<p class="rjpEtaIntro">Atualizado: '+safeText(stamp??"—")+
+  ' · '+safeText(loading?"Consulta em curso":current?current+" horas previstas/estimadas": "sem ETA operacional")+'</p>'+
+  '<p class="rjpEtaIntro">Horários por estação da CP/GTFS. ETA apenas quando a CP comunica uma previsão ou atraso. '+
+  'Previsões não são passagens confirmadas.</p>'+
+  '<div class="rjpEtaList">'+rows+'</div></section>'+
+  '<section class="rjpSourceDetails"><p>Fonte: <strong>'+safeText(source)+'</strong></p>'+
+  '<p class="rjpCpDetailStatus">'+safeText(stateLabel)+'</p>'+positionNote+
+  '<details><summary>Método e limitações</summary>'+
+  '<p>'+safeText(kind==="estimated"?v.basis:kind==="gps"?"Posição reportada pela TML, sem interpolação":
+   kind==="rui"?v.note:"Horário fornecido pelo GTFS CP")+'</p>'+
+  '<p>As posições estimadas e os ETA não devem ser usados para segurança da exploração ferroviária.</p>'+
+  '</details></section></div>';
+}
+function openTrainDetails(kind,v){
+ const overlay=document.getElementById("rjpTrainOverlay");
+ const slot=document.getElementById("rjpTrainDialogContent");
+ const token=++detailDialogSequence;
+ // Any Leaflet information balloons must not overlap the modal.
+ map.closePopup();
+ const train=findCatalogueJourney(kind,v);
+ const number=String(kind==="gps"?(v.trainNumber??""):v.number??"");
+ const date=kind==="estimated"?v.date:data?.date;
+ const stored=operationalQueries.get(number);
+ const cacheValid=stored?.success&&stored.date===date&&
+  Date.now()-Date.parse(stored.result?.obtainedAt??0)<120000;
+ const cp=cacheValid?stored.result:null;
+ overlay.hidden=false;
+ slot.innerHTML=trainDetailsMarkup(kind,v,train,cp,{loading:!cacheValid&&/^\d{1,6}$/.test(number)&&date===currentLisbon().date});
+ slot.closest(".rjpTrainDialog")?.scrollTo(0,0);
+ if(!/^\d{1,6}$/.test(number)||date!==currentLisbon().date||cacheValid)return;
+ const transport=async(url,opts)=>{
+  if(url===CP_CONFIG_URL&&cpConfigCache&&Date.now()-cpConfigCachedAt<120000)return cpConfigCache;
+  const p=await fetchRemoteJson(url,opts);
+  if(url===CP_CONFIG_URL){cpConfigCache=p;cpConfigCachedAt=Date.now();}
+  return p;
+ };
+ lookupCpOperational({number,date,transport}).then(result=>{
+  if(token!==detailDialogSequence||overlay.hidden)return;
+  operationalQueries.set(number,{date,number,success:true,checkedAt:result.obtainedAt,result});
+  slot.innerHTML=trainDetailsMarkup(kind,v,train,result);
+  renderCoverage();
+  refreshEstimates();
+ }).catch(e=>{
+  if(token!==detailDialogSequence||overlay.hidden)return;
+  slot.innerHTML=trainDetailsMarkup(kind,v,train,null,{
+   error:"serviço temporariamente indisponível"
+  });
+ });
+}
+
 function renderGps(){
  gpsMarkers.clearLayers();
  const q=dom.q.value.trim().toLocaleLowerCase("pt-PT");
@@ -145,16 +281,12 @@ function renderGps(){
  for(const v of visible){
   const marker=L.marker([v.latitude,v.longitude],{icon:gpsIcon(v.type)}).addTo(gpsMarkers);
   marker.bindTooltip(safeText((v.trainNumber?v.type+" "+v.trainNumber:v.operator+" "+v.vehicleId)+" · TML"));
-  marker.bindPopup('<b>'+safeText(v.trainNumber?v.type+" "+v.trainNumber:v.operator+" "+v.vehicleId)+'</b><p>'+gpsChip({state:"available",label:"GPS disponível",detail:"Posição recente TML."})+'</p>'+
-   '<p>'+safeText(v.origin&&v.destination?v.origin+" → "+v.destination:"Percurso não validado")+'</p>'+
-   '<p>Latitude '+v.latitude.toFixed(5)+' · Longitude '+v.longitude.toFixed(5)+'</p>'+
-   '<p>Observado: '+new Date(v.timestamp).toLocaleString("pt-PT")+'</p>'+
-   '<small>Fonte TML · correspondência '+safeText(v.matchMethod)+' · não interpolado</small>');
+  marker.on("click",()=>openTrainDetails("gps",v));
  }
  dom.liveTrains.querySelectorAll("button[data-gps]").forEach(b=>b.onclick=()=>{
   const v=visible[Number(b.dataset.gps)];
   map.setView([v.latitude,v.longitude],12);
-  gpsMarkers.eachLayer(m=>{const p=m.getLatLng();if(p.lat===v.latitude&&p.lng===v.longitude)m.openPopup()});
+  openTrainDetails("gps",v);
  });
 }
 
@@ -218,13 +350,13 @@ function renderEstimates(){
  for(const v of visible){
   const marker=L.marker([v.latitude,v.longitude],{icon:estimatedIcon(v),zIndexOffset:-700}).addTo(estimatedMarkers);
   marker.bindTooltip("≈ "+safeText(v.type+" "+v.number)+" · NÃO GPS");
-  marker.bindPopup(estimatedDetails(v),{maxWidth:320});
+  marker.on("click",()=>openTrainDetails("estimated",v));
   markerMap.set(v.date+":"+v.tripId,marker);
  }
  dom.estimatedTrains.querySelectorAll("[data-est-index]").forEach(b=>b.onclick=()=>{
   const v=visible[Number(b.dataset.estIndex)];
   map.setView([v.latitude,v.longitude],11);
-  markerMap.get(v.date+":"+v.tripId)?.openPopup();
+  openTrainDetails("estimated",v);
  });
  const byTrip=new Map(estimatedVehicles.map(v=>[v.date+":"+v.tripId,v]));
  dom.trains.querySelectorAll("[data-estimate-chip]").forEach(x=>{
@@ -330,21 +462,13 @@ function renderRuiFallback(){
   }).addTo(ruiMarkers);
   const updated=new Date(v.checkedAt).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"});
   marker.bindTooltip("Rui Costa · contingência · "+safeText(v.type+" "+v.number));
-  marker.bindPopup('<strong>'+safeText(v.type+" "+v.number)+'</strong>'+
-   '<p><strong>Comboios Live · Rui Costa — ÚLTIMO RECURSO</strong></p>'+
-   '<p>'+safeText(v.origin+" → "+v.destination)+'</p>'+
-   '<p>Última estação: '+safeText(v.lastStation??"não indicada")+
-    ' · próxima: '+safeText(v.nextStation??"não indicada")+'</p>'+
-   '<p>Estado: '+safeText(v.status??"não indicado")+' · atraso: '+
-    safeText(v.delayMinutes==null?"não indicado":v.delayMinutes+" min")+'</p>'+
-   '<p>Consulta externa: '+safeText(updated)+'</p>'+
-   '<p><strong>Não comprovado como GPS.</strong> '+safeText(v.note)+'</p>',{maxWidth:340});
+  marker.on("click",()=>openTrainDetails("rui",v));
   markers.set(v.number,marker);
  }
  dom.ruiFallbackTrains.querySelectorAll("[data-rc-index]").forEach(b=>b.onclick=()=>{
   const v=visible[Number(b.dataset.rcIndex)];
   map.setView([v.latitude,v.longitude],11);
-  markers.get(v.number)?.openPopup();
+  openTrainDetails("rui",v);
  });
 }
 function clearRuiFallback(){
@@ -602,21 +726,12 @@ function renderStations(){
 }
 function viewTrain(t){
  routeLayer.clearLayers();
- const points=(t.stops||[]).filter(s=>sameLocation(s.location)).map(s=>s.location);
+ const points=(t.stops??[]).filter(s=>sameLocation(s.location)).map(s=>s.location);
  if(points.length>=2){
   L.polyline(points,{color:COLORS[t.type]||COLORS.CP,weight:3,opacity:.8,dashArray:"6 7"}).addTo(routeLayer);
   map.fitBounds(L.latLngBounds(points).pad(.12),{maxZoom:11});
- }else if(points.length===1)map.setView(points[0],12);
- const panel=document.createElement("div");
- panel.className="details";
- panel.innerHTML=`<div><strong>${safeText(t.type)} ${safeText(t.number)}</strong> · ${safeText(t.origin)} → ${safeText(t.destination)}</div><div class="detailsGps" data-gps-detail-number="${safeText(t.number)}" data-gps-detail-trip="${safeText(t.id)}">${gpsChip(statusGps(t.number,t.id))}</div><p>Paragens programadas (não há confirmação de passagem em direto)</p>`+
- (t.stops||[]).map(s=>`<div class="stop"><span>${safeText(s.name)}</span><span>${safeText(s.departure||s.arrival)}</span></div>`).join("");
- panel.innerHTML+='<div data-estimate-detail="'+safeText(t.number)+'" data-estimate-detail-trip="'+safeText(t.id)+'"></div>';
- const existing=document.querySelector(".details");if(existing)existing.remove();
- const overlay=document.getElementById("rjpTrainOverlay");
- document.getElementById("rjpTrainDialogContent").replaceChildren(panel);
- overlay.hidden=false;
- renderEstimates();
+ }
+ openTrainDetails("scheduled",t);
 }
 function renderTrains(){
  if(!data){renderGps();return;}
@@ -858,7 +973,7 @@ otaCheck.onclick=async()=>{
  output.hidden=false;output.textContent="A verificar a versão experimental…";
  try{
   const remote=await fetchRemoteJson("https://raw.githubusercontent.com/ruijpedro/RJP-Train-Live-2/main/package.json",{timeoutMs:9000});
-  output.textContent="Versão instalada: 2.0.12-beta.1 · Código do laboratório: "+String(remote.version??"indisponível")+
+  output.textContent="Versão instalada: 2.0.13-beta.1 · Código do laboratório: "+String(remote.version??"indisponível")+
    ". A beta 2.0 ainda não tem OTA próprio. A OTA da Trains original continua intacta.";
  }catch(e){output.textContent="Não foi possível verificar a versão online. A OTA original não foi alterada."}
 };
