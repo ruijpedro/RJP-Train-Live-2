@@ -1,6 +1,11 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./style.css";
+import "./original-layout.css";
+import {Capacitor} from "@capacitor/core";
+import {LocalNotifications} from "@capacitor/local-notifications";
+import {installOriginalLayout} from "./original-layout.js";
+import {installEditableAlertUI} from "./editable-alert-ui.js";
 import {CP_AGENCY,FT_AGENCY,TML_URL,FT_FALLBACK_URL,normalizePositions,asRows} from "./live-positions.js";
 import {buildUnifiedFeed} from "./unified-feed.js";
 import {fetchTmlJson,fetchRemoteJson,transportLabel} from "./native-http.js";
@@ -21,7 +26,7 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.11-beta.1 · redundância de emergência</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.12-beta.1 · visual original e alertas editáveis</small></div>
 </header>
 <div class="sourceNote"><strong>GPS real e estimativas nacionais</strong><span>Marcadores cheios: coordenadas reais TML. Marcadores ≈ tracejados: NÃO GPS. Roxo: estimativa ancorada na última estação CP; âmbar: previsão só pelo horário GTFS. As estimativas podem afastar-se muito da localização real.</span></div>
 <div class="controls">
@@ -66,6 +71,7 @@ el.innerHTML = `
 </div>
 <footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. GPS TML (máx. 3 minutos) é distinto das estimativas CP + GTFS ou só GTFS. Estimativas não são localizações exatas nem confirmação de circulação. Não utilizar para segurança da exploração.</footer>
 `;
+installOriginalLayout({version:"2.0.12-beta.1",base:BASE});
 
 const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote","sampleNational","sampleResult","focusEstimated","showCpEstimates","showScheduleEstimates","estimatedTrains","estimateStats","cpAutoStatus","showStations","mapTotals","serviceDayNotice","ruiFallbackStatus","ruiFallbackSection","ruiFallbackTrains"].map(id=>[id,document.getElementById(id)]));
 let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),estimatedMarkers=L.layerGroup(),ruiMarkers=L.layerGroup(),gpsVehicles=[],estimatedVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null,cpAutoBusy=false,cpAutoLastBatch=0,cpConfigCache=null,cpConfigCachedAt=0,previousDayData=null,didInitialAutoFit=false,manualDateSelection=false,dayRequestSeq=0,lastLocalServiceDate=currentLisbon().date,
@@ -606,8 +612,9 @@ function viewTrain(t){
  (t.stops||[]).map(s=>`<div class="stop"><span>${safeText(s.name)}</span><span>${safeText(s.departure||s.arrival)}</span></div>`).join("");
  panel.innerHTML+='<div data-estimate-detail="'+safeText(t.number)+'" data-estimate-detail-trip="'+safeText(t.id)+'"></div>';
  const existing=document.querySelector(".details");if(existing)existing.remove();
- document.querySelector(".results").append(panel);
- panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+ const overlay=document.getElementById("rjpTrainOverlay");
+ document.getElementById("rjpTrainDialogContent").replaceChildren(panel);
+ overlay.hidden=false;
  renderEstimates();
 }
 function renderTrains(){
@@ -767,9 +774,13 @@ dom.day.addEventListener("change",()=>{manualDateSelection=true;listLimit=PAGE_S
 dom.reload.onclick=()=>{didInitialAutoFit=false;gtfsLoadAttempted=false;load();loadGps();cpAutoLastBatch=0;};
 dom.focusGps.onclick=()=>focusGpsMarkers();
 dom.showNational.onclick=()=>{
- selected="ALL";dom.q.value="";listLimit=PAGE_SIZE;
- renderTypes();renderTrains();renderGps();
- dom.catalogHeading.scrollIntoView({behavior:"smooth",block:"start"});
+ const catalog=document.getElementById("rjpCatalogGroup");
+ catalog.hidden=!catalog.hidden;
+ if(!catalog.hidden){
+  selected="ALL";dom.q.value="";listLimit=PAGE_SIZE;
+  renderTypes();renderTrains();renderGps();
+  dom.catalogHeading.scrollIntoView({behavior:"smooth",block:"start"});
+ }
 };
 renderTypes();
 loadBuildAudit();
@@ -783,3 +794,70 @@ setInterval(limitedCpNationalRefresh,5*60*1000);
 setInterval(checkServiceDayRollover,30000);
 
 setInterval(maybeRuiFallback,60000);
+
+
+// Summary mirrors the original's three compact metrics rather than LAB tables.
+function updateOriginalOverview(){
+ const all=gpsVehicles.length+estimatedVehicles.length+ruiFallbackVehicles.length;
+ const delays=[...operationalQueries.values()].filter(q=>q.success&&Number(q.result?.delayMinutes)>0).length;
+ const by=id=>document.getElementById(id);
+ by("rjpCount").textContent=String(all);
+ by("rjpDelays").textContent=String(delays);
+ by("rjpUpdated").textContent=tmlChecked?new Date().toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"}):"—";
+ const status=by("rjpLiveStatus"),dot=by("rjpLiveDot");
+ const emergency=ruiFallbackVehicles.length>0;
+ status.textContent=emergency?"Contingência Comboios Live":all?
+  "Online · "+all+" posições/estimativas":"A consultar fontes ferroviárias…";
+ dot.classList.toggle("on",all>0);
+}
+async function authorizeLocalAlerts(){
+ if(Capacitor.isNativePlatform()){
+  const r=await LocalNotifications.requestPermissions();
+  return r.display==="granted";
+ }
+ if(typeof Notification==="undefined")return false;
+ return (await Notification.requestPermission())==="granted";
+}
+async function showLocalAlert(candidate){
+ const arrival=candidate.event==="departure"?"partida":"chegada";
+ const title=candidate.number==="TESTE"?
+  "RJP Train Live 2.0 · Teste de notificação":
+  "Comboio "+candidate.number+" · "+arrival+" prevista";
+ const body=candidate.number==="TESTE"?
+  "A aplicação pode apresentar notificações locais":
+  candidate.station+" · "+candidate.time+" · previsão GTFS, não passagem confirmada";
+ if(Capacitor.isNativePlatform()){
+  const p=await LocalNotifications.checkPermissions();
+  if(p.display!=="granted")return false;
+  const id=Math.max(1,Math.floor(Math.random()*2147480000));
+  await LocalNotifications.schedule({notifications:[{
+   id,title,body,
+   schedule:{at:new Date(Date.now()+1000)},
+   extra:{source:"CP GTFS · previsão local",rjpBeta:true}
+  }]});
+  return true;
+ }
+ if(typeof Notification!=="undefined"&&Notification.permission==="granted"){
+  new Notification(title,{body});return true;
+ }
+ return false;
+}
+const editableAlerts=installEditableAlertUI({
+ getCatalogue:()=>data?.trains??[],
+ getDate:()=>data?.date??null,
+ requestPermission:authorizeLocalAlerts,
+ notify:showLocalAlert
+});
+const otaCheck=document.getElementById("rjpOtaCheck");
+otaCheck.onclick=async()=>{
+ const output=document.getElementById("rjpOtaMessage");
+ output.hidden=false;output.textContent="A verificar a versão experimental…";
+ try{
+  const remote=await fetchRemoteJson("https://raw.githubusercontent.com/ruijpedro/RJP-Train-Live-2/main/package.json",{timeoutMs:9000});
+  output.textContent="Versão instalada: 2.0.12-beta.1 · Código do laboratório: "+String(remote.version??"indisponível")+
+   ". A beta 2.0 ainda não tem OTA próprio. A OTA da Trains original continua intacta.";
+ }catch(e){output.textContent="Não foi possível verificar a versão online. A OTA original não foi alterada."}
+};
+updateOriginalOverview();
+setInterval(updateOriginalOverview,10000);
+setInterval(()=>editableAlerts.poll(),30000);

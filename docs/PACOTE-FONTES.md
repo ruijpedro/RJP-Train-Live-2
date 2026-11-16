@@ -109,3 +109,13 @@ A pedido do utilizador, a fonte Comboios Live de Rui Costa é **contingência**,
 A fonte externa só é consultada **depois de terminadas as tentativas independentes**, quando não existem quaisquer posições CP reportadas pela TML nem estimativas independentes utilizáveis para a data atual. A falta de GPS num comboio isolado NÃO faz regressar toda a rede ao Rui Costa. Se a fonte independente recuperar, os pontos de contingência desaparecem; nunca se misturam nos contadores de GPS TML nem são usados nos alertas.
 
 Ordem da contingência: endpoint público de Comboios Live, seguido do proxy já existente da RJP Train original caso o pedido direto falhe. Ambos se referem à **mesma origem**, logo não são redundância de fornecedores diferentes. Apenas um grupo separado de marcadores identificados como “Comboios Live · Rui Costa — emergência” é desenhado. A hora de consulta é indicada; a hora original e o método de obtenção de coordenadas do terceiro não são afirmados como GPS confirmado. Reavaliar limites de utilização e autorização antes de qualquer migração para produção.
+
+
+## 2.0.12-beta.1 — layout da Trains original e alertas editáveis
+
+- A Trains original fica intocada. Na 2.0 experimental, header, ícone, pesquisa, Atualizar, Alertas, Verificar OTA, filtros, três indicadores, mapa e lista passam a seguir a hierarquia visual da aplicação original.
+- Tabelas GTFS, consulta CP direta, relatórios de fontes e diagnóstico passam para Informação avançada, fechada por defeito.
+- Os alertas desta beta podem ser **criados, editados sem duplicar, ativados/desativados e eliminados**. É possível alterar estação, comboio, comboio + estação, chegada/partida, antecedência, dias da semana, data específica e dia do mês. As regras ficam em armazenamento próprio da 2.0, separado da original.
+- Notificações locais em primeiro plano dependem de autorização do dispositivo. Passagens detetadas, Firebase e push remoto com aplicação fechada ainda não migraram para a beta; o respetivo controlo de passagem fica desativado, não sendo anunciada funcionalidade inexistente.
+- O botão de verificar OTA da beta apenas consulta a versão no repositório, **não instala bundles**. A OTA original não é modificada.
+- Mantêm-se os três tipos de localização (TML, estimativa CP/GTFS e contingência Rui Costa, último recurso).
