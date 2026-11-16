@@ -144,6 +144,7 @@ function findCatalogueJourney(kind,v){
  return trains.find(t=>String(t.number)===number)??null;
 }
 function sourceTime(ms){
+ if(ms===null||ms===undefined||ms==="")return null;
  const d=new Date(ms);
  return Number.isFinite(d.getTime())?d.toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):null;
 }
