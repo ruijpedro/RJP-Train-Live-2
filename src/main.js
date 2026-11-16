@@ -296,6 +296,106 @@ async function limitedCpNationalRefresh(){
  }finally{cpAutoBusy=false}
 }
 
+
+function renderRuiFallback(){
+ ruiMarkers.clearLayers();
+ dom.ruiFallbackSection.hidden=ruiFallbackVehicles.length===0;
+ if(!ruiFallbackVehicles.length){dom.ruiFallbackTrains.innerHTML="";return}
+ const q=dom.q.value.trim().toLocaleLowerCase("pt-PT");
+ const visible=ruiFallbackVehicles.filter(v=>
+   (selected==="ALL"||selected==="CP"||v.type===selected)&&
+   (!q||[v.number,v.origin,v.destination,v.type,v.lastStation,v.nextStation]
+     .some(s=>String(s??"").toLocaleLowerCase("pt-PT").includes(q))));
+ dom.ruiFallbackTrains.innerHTML=visible.slice(0,125).map((v,i)=>
+  '<button class="train ruiFallbackRow" type="button" data-rc-index="'+i+'">'+
+  '<span class="pill" style="--type-color:'+(COLORS[v.type]||COLORS.CP)+'">'+safeText(v.type)+'</span>'+
+  '<span class="trainInfo"><strong>'+safeText(v.type+" "+v.number)+'</strong>'+
+  '<small>'+safeText(v.origin+" → "+v.destination)+'</small>'+
+  '<span class="ruiFallbackChip">Fonte de emergência: Rui Costa · NÃO GPS verificado</span>'+
+  '<small>Última estação indicada: '+safeText(v.lastStation??"não indicada")+'</small></span></button>'
+ ).join("")+(visible.length>125?'<p class="limit">Mostrados 125 de '+visible.length+' resultados; usa a pesquisa.</p>':"");
+ const markers=new Map();
+ for(const v of visible){
+  const marker=L.marker([v.latitude,v.longitude],{
+   icon:L.divIcon({className:"ruiMarkerIcon",
+    html:'<span class="ruiMarker" title="Rui Costa · contingência">'+safeText(v.type)+'</span>',
+    iconSize:[33,33],iconAnchor:[16,16]}),zIndexOffset:-800
+  }).addTo(ruiMarkers);
+  const updated=new Date(v.checkedAt).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"});
+  marker.bindTooltip("Rui Costa · contingência · "+safeText(v.type+" "+v.number));
+  marker.bindPopup('<strong>'+safeText(v.type+" "+v.number)+'</strong>'+
+   '<p><strong>Comboios Live · Rui Costa — ÚLTIMO RECURSO</strong></p>'+
+   '<p>'+safeText(v.origin+" → "+v.destination)+'</p>'+
+   '<p>Última estação: '+safeText(v.lastStation??"não indicada")+
+    ' · próxima: '+safeText(v.nextStation??"não indicada")+'</p>'+
+   '<p>Estado: '+safeText(v.status??"não indicado")+' · atraso: '+
+    safeText(v.delayMinutes==null?"não indicado":v.delayMinutes+" min")+'</p>'+
+   '<p>Consulta externa: '+safeText(updated)+'</p>'+
+   '<p><strong>Não comprovado como GPS.</strong> '+safeText(v.note)+'</p>',{maxWidth:340});
+  markers.set(v.number,marker);
+ }
+ dom.ruiFallbackTrains.querySelectorAll("[data-rc-index]").forEach(b=>b.onclick=()=>{
+  const v=visible[Number(b.dataset.rcIndex)];
+  map.setView([v.latitude,v.longitude],11);
+  markers.get(v.number)?.openPopup();
+ });
+}
+function clearRuiFallback(){
+ const had=ruiFallbackVehicles.length>0;
+ ruiFallbackVehicles=[];ruiLastError=null;
+ renderRuiFallback();
+ dom.ruiFallbackStatus.textContent="Comboios Live: em reserva · fontes independentes disponíveis.";
+ if(had)didRuiAutoFit=false;
+}
+async function maybeRuiFallback(){
+ if(ruiFetchBusy||!tmlChecked||!gtfsLoadAttempted)return;
+ const clock=currentLisbon();
+ const dateCurrent=(!manualDateSelection||data?.date===clock.date);
+ const tmlCp=gpsVehicles.filter(v=>v.agency===CP_AGENCY).length;
+ const active=shouldUseRuiFallback({dateCurrent,checkedTml:tmlChecked,
+  checkedGtfs:gtfsLoadAttempted,independentCPPositions:tmlCp,
+  gtfsEstimates:estimatedVehicles.length});
+ if(!active){if(ruiFallbackVehicles.length)clearRuiFallback();else
+  dom.ruiFallbackStatus.textContent="Comboios Live: em reserva · CP/TML/GTFS continuam prioritários.";
+  return}
+ const now=Date.now();
+ if(ruiLastFetch&&now-ruiLastFetch<60000){
+  if(ruiFallbackVehicles.length&&now-ruiLastFetch>90000){
+   ruiFallbackVehicles=[];renderRuiFallback();
+  }
+  return;
+ }
+ ruiFetchBusy=true;ruiLastFetch=now;
+ dom.ruiFallbackStatus.textContent="Fontes próprias sem posições CP: a ativar recurso de emergência Comboios Live…";
+ try{
+  let normalized=[],reason="indisponível";
+  for(const url of [RUI_DIRECT_URL,RUI_WORKER_RELAY]){
+   try{
+    const payload=await fetchRemoteJson(url,{timeoutMs:12000});
+    normalized=normalizeRuiFallback(payload,{fetchedAt:Date.now()});
+    if(normalized.length)break;
+    reason="resposta sem comboios válidos";
+   }catch(e){reason=String(e?.message||e).slice(0,90)}
+  }
+  // The independent sources may recover while the secondary request is in flight.
+  if(gpsVehicles.some(v=>v.agency===CP_AGENCY)||estimatedVehicles.length){
+   clearRuiFallback();return;
+  }
+  ruiFallbackVehicles=normalized;
+  ruiLastError=normalized.length?null:reason;
+  renderRuiFallback();
+  dom.ruiFallbackStatus.textContent=normalized.length?
+   "CONTINGÊNCIA ATIVA · "+normalized.length+
+   " comboios de Comboios Live (Rui Costa) · dados externos, não GPS comprovado":
+   "Contingência Comboios Live indisponível; sem posições CP independentes.";
+  if(normalized.length&&!didRuiAutoFit){
+   didRuiAutoFit=true;
+   const bounds=L.latLngBounds(normalized.map(v=>[v.latitude,v.longitude]));
+   if(bounds.isValid()){map.invalidateSize();map.fitBounds(bounds.pad(.1),{animate:false,maxZoom:8})}
+  }
+ }finally{ruiFetchBusy=false}
+}
+
 function renderCoverage(){
  const day=data?.date??null;
  const report=coverageAudit({
