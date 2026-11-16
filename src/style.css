@@ -118,3 +118,16 @@
 .estimateDetail p{margin:6px 0}
 .estimateDetail strong{color:#623888}
 @media(max-width:800px){.estimatePanel{gap:9px;padding:9px}.estimatePanel label{font-size:11px}}
+
+/* Comboios Live is strictly a LAST-RESORT layer, never presented as GNSS. */
+[hidden]{display:none!important}
+.ruiFallbackSection{margin:15px 0;border:1px solid #a47a4e;border-radius:10px;padding:12px;background:#271f20}
+.ruiFallbackSection h2{color:#ffdfa7!important}
+.ruiFallbackRow{border:1px dashed #e3a354;background:#372a22}
+.ruiFallbackRow .trainInfo small{white-space:normal}
+.ruiMarkerIcon{background:transparent;border:0}
+.ruiMarker{width:33px;height:33px;border-radius:50%;display:grid;place-items:center;
+ border:2px dotted #fff;background:#995628;color:#fff;font-weight:800;font-size:10px;
+ box-shadow:0 2px 8px #0009}
+.ruiFallbackChip{border:1px dashed #eab773;padding:4px 7px;color:#ffe5b4;
+ border-radius:8px;font-weight:800;font-size:10px;display:inline-flex;margin-top:5px}

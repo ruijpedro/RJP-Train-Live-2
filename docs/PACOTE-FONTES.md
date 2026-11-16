@@ -100,3 +100,12 @@ Um botão na APK permite consultar, sob pedido explícito do utilizador, até ci
 A data atual de Lisboa é selecionada automaticamente ao abrir e mudada à meia-noite, quando disponível no GTFS embutido. O motor inclui comboios da véspera com horários de chegada 24:xx/25:xx. O mapa enquadra posições TML + estimativas de todo o território; pontos de estações ocultos inicialmente, com opção para mostrar. Os Urbanos Sintra, Cascais, Sado, Azambuja, Aveiro, Marco, Braga, Guimarães e Leixões são reconhecidos como U quando o GTFS os denomina por linha. O número de comboios estimados é uma contagem de serviços teoricamente em curso, não uma declaração de circulação confirmada. A base GTFS da APK cobre 7 dias após a compilação: se o dia atual não existir na base, é apresentada informação de desatualização sem desenhar estimativas falsas.
 
 A compilação 2.0.10 importa o dia anterior e sete dias a partir da data atual (8 ficheiros diários), para permitir mostrar os serviços que arrancaram ontem e terminam depois da meia-noite de hoje. O número apresentado de comboios em circulação prevista será muito inferior ao total diário, especialmente durante a madrugada.
+
+
+## Redundância em último recurso (2.0.11-beta.1)
+
+A pedido do utilizador, a fonte Comboios Live de Rui Costa é **contingência**, e não a fonte principal. A app começa sempre por CP GTFS online/offline, consultas operacionais CP, posições reais TML e estimativas próprias.
+
+A fonte externa só é consultada **depois de terminadas as tentativas independentes**, quando não existem quaisquer posições CP reportadas pela TML nem estimativas independentes utilizáveis para a data atual. A falta de GPS num comboio isolado NÃO faz regressar toda a rede ao Rui Costa. Se a fonte independente recuperar, os pontos de contingência desaparecem; nunca se misturam nos contadores de GPS TML nem são usados nos alertas.
+
+Ordem da contingência: endpoint público de Comboios Live, seguido do proxy já existente da RJP Train original caso o pedido direto falhe. Ambos se referem à **mesma origem**, logo não são redundância de fornecedores diferentes. Apenas um grupo separado de marcadores identificados como “Comboios Live · Rui Costa — emergência” é desenhado. A hora de consulta é indicada; a hora original e o método de obtenção de coordenadas do terceiro não são afirmados como GPS confirmado. Reavaliar limites de utilização e autorização antes de qualquer migração para produção.

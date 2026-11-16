@@ -10,6 +10,7 @@ import {coverageAudit} from "./coverage-audit.js";
 import {gpsIndicator,GPS_MAX_AGE_MS} from "./gps-indicator.js";
 import {buildEstimatedPositions,currentLisbon,previousServiceDate} from "./estimated-positions.js";
 import {REMOTE_CP_GTFS,usableManifest} from "./gtfs-sync.js";
+import {RUI_DIRECT_URL,RUI_WORKER_RELAY,shouldUseRuiFallback,normalizeRuiFallback} from "./rui-fallback.js";
 
 const BASE = import.meta.env.BASE_URL;
 const LOCAL_CP_BASE=BASE+"data/cp/";
@@ -20,7 +21,7 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.10-beta.1 · mapa CP nacional</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.11-beta.1 · redundância de emergência</small></div>
 </header>
 <div class="sourceNote"><strong>GPS real e estimativas nacionais</strong><span>Marcadores cheios: coordenadas reais TML. Marcadores ≈ tracejados: NÃO GPS. Roxo: estimativa ancorada na última estação CP; âmbar: previsão só pelo horário GTFS. As estimativas podem afastar-se muito da localização real.</span></div>
 <div class="controls">
@@ -46,6 +47,7 @@ el.innerHTML = `
  <div class="labAuditMetrics"><div><small>CP com posição TML</small><b id="cpLive">—</b></div><div><small>CP identificados</small><b id="cpMatched">—</b></div><div><small>Fertagus com posição</small><b id="ftLive">—</b></div><div><small>CP programados (GTFS)</small><b id="scheduled">—</b></div><div><small>Respostas CP nesta sessão</small><b id="cpAnswered">0</b></div><div><small>Com indicadores CP</small><b id="cpEvidence">0</b></div></div>
  <p id="auditText">A aguardar diagnóstico de fontes…</p><div id="coverageTypes" class="coverageTypes" aria-label="Cobertura por tipo de comboio"></div><p id="coverageNote" class="coverageNote">GTFS ≠ circulação confirmada; indicadores CP ≠ localização GPS.</p>
  <p id="buildAudit">Registo da compilação: a carregar…</p>
+ <p id="ruiFallbackStatus">Contingência Comboios Live: reserva, desativada.</p>
 </section>
 <div class="estimatePanel">
  <div><strong>Localizações CP no mapa</strong><span id="estimateStats">A calcular posições aproximadas…</span><span id="mapTotals">A contar GPS e estimativas…</span></div>
@@ -58,13 +60,16 @@ el.innerHTML = `
 </div>
 <div class="workspace">
  <div id="map" aria-label="Mapa de estações CP"></div>
- <section class="results"><h2>Posições reais reportadas pela TML</h2><p class="legendLab">Fonte + hora de posição · só aparece o número do comboio quando validado no GTFS da CP</p><div id="liveTrains" class="gpsResults"></div><h2>Comboios estimados — NÃO GPS</h2><p class="legendLab">≈ Roxo = CP + GTFS; ≈ âmbar = apenas horário, circulação não confirmada. Abre o comboio para ver fonte, estimativa e incerteza.</p><div id="estimatedTrains" class="estimateResults"></div><h2 id="catalogHeading">Catálogo nacional CP — serviços programados</h2><p class="legendLab">Pesquisa nacional no GTFS. Cada comboio indica «GPS disponível» ou «Sem GPS recebido». Quando não há GPS, podemos desenhar uma previsão APROXIMADA, identificada como estimativa, nunca como GPS.</p><div id="catalogCount" class="catalogCount">A carregar catálogo…</div><div id="trains"></div></section>
+ <section class="results"><h2>Posições reais reportadas pela TML</h2><p class="legendLab">Fonte + hora de posição · só aparece o número do comboio quando validado no GTFS da CP</p><div id="liveTrains" class="gpsResults"></div><h2>Comboios estimados — NÃO GPS</h2><p class="legendLab">≈ Roxo = CP + GTFS; ≈ âmbar = apenas horário, circulação não confirmada. Abre o comboio para ver fonte, estimativa e incerteza.</p><div id="estimatedTrains" class="estimateResults"></div>
+ <section id="ruiFallbackSection" class="ruiFallbackSection" hidden><h2>Contingência — Comboios Live (Rui Costa)</h2><p class="legendLab">Fonte externa de ÚLTIMO RECURSO. Coordenadas não verificadas como GPS pela RJP; nunca substituem CP/TML/GTFS quando disponíveis.</p><div id="ruiFallbackTrains"></div></section>
+ <h2 id="catalogHeading">Catálogo nacional CP — serviços programados</h2><p class="legendLab">Pesquisa nacional no GTFS. Cada comboio indica «GPS disponível» ou «Sem GPS recebido». Quando não há GPS, podemos desenhar uma previsão APROXIMADA, identificada como estimativa, nunca como GPS.</p><div id="catalogCount" class="catalogCount">A carregar catálogo…</div><div id="trains"></div></section>
 </div>
 <footer><b>RJP Train Live 2.0 — laboratório.</b> A Trains original não é modificada. GPS TML (máx. 3 minutos) é distinto das estimativas CP + GTFS ou só GTFS. Estimativas não são localizações exatas nem confirmação de circulação. Não utilizar para segurança da exploração.</footer>
 `;
 
-const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote","sampleNational","sampleResult","focusEstimated","showCpEstimates","showScheduleEstimates","estimatedTrains","estimateStats","cpAutoStatus","showStations","mapTotals","serviceDayNotice"].map(id=>[id,document.getElementById(id)]));
-let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),estimatedMarkers=L.layerGroup(),gpsVehicles=[],estimatedVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null,cpAutoBusy=false,cpAutoLastBatch=0,cpConfigCache=null,cpConfigCachedAt=0,previousDayData=null,didInitialAutoFit=false,manualDateSelection=false,dayRequestSeq=0,lastLocalServiceDate=currentLisbon().date;
+const dom = Object.fromEntries(["q","day","types","reload","focusGps","count","freshness","trains","gpsStatus","liveTrains","cpLive","cpMatched","ftLive","scheduled","auditText","buildAudit","cpNumber","cpLookup","cpResult","showNational","catalogCount","catalogHeading","cpAnswered","cpEvidence","coverageTypes","coverageNote","sampleNational","sampleResult","focusEstimated","showCpEstimates","showScheduleEstimates","estimatedTrains","estimateStats","cpAutoStatus","showStations","mapTotals","serviceDayNotice","ruiFallbackStatus","ruiFallbackSection","ruiFallbackTrains"].map(id=>[id,document.getElementById(id)]));
+let manifest=null,data=null,selected="ALL",stationMarkers=L.layerGroup(),routeLayer=L.layerGroup(),stationIndex=new Map(),gpsMarkers=L.layerGroup(),estimatedMarkers=L.layerGroup(),ruiMarkers=L.layerGroup(),gpsVehicles=[],estimatedVehicles=[],didFocusGps=false,lastGpsStatus="",latestTmlRows=[],lastTmlError=null,tmlChecked=false,ftProxyUsed=false,listLimit=PAGE_SIZE,operationalQueries=new Map(),coverageDate=null,cpAutoBusy=false,cpAutoLastBatch=0,cpConfigCache=null,cpConfigCachedAt=0,previousDayData=null,didInitialAutoFit=false,manualDateSelection=false,dayRequestSeq=0,lastLocalServiceDate=currentLisbon().date,
+ gtfsLoadAttempted=false,ruiFallbackVehicles=[],ruiLastFetch=0,ruiFetchBusy=false,ruiLastError=null,didRuiAutoFit=false;
 const map=L.map("map",{zoomControl:true}).setView([39.65,-8.15],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);
 L.tileLayer("https://{s}.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",{maxZoom:19,opacity:.88,attribution:"OpenRailwayMap"}).addTo(map);
@@ -73,6 +78,7 @@ dom.showStations.onchange=()=>dom.showStations.checked?stationMarkers.addTo(map)
 routeLayer.addTo(map);
 gpsMarkers.addTo(map);
 estimatedMarkers.addTo(map);
+ruiMarkers.addTo(map);
 
 function safeText(v){return String(v??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));}
 function statusGps(number,tripId=null,date=data?.date){
@@ -95,7 +101,7 @@ function sameLocation(p){return Array.isArray(p)&&p.length===2&&p.every(Number.i
 function setMessage(msg){dom.count.textContent=msg;}
 function renderTypes(){
  dom.types.innerHTML=["ALL",...TYPES].map(t=>`<button class="type ${selected===t?"active":""}" data-type="${t}" style="--type-color:${COLORS[t]||"#38bdf8"}">${t==="ALL"?"Todos":t}</button>`).join("");
- dom.types.querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=b.dataset.type;listLimit=PAGE_SIZE;renderTypes();renderTrains();renderGps();renderEstimates();});
+ dom.types.querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=b.dataset.type;listLimit=PAGE_SIZE;renderTypes();renderTrains();renderGps();renderEstimates();renderRuiFallback();});
 }
 
 function focusGpsMarkers(){
@@ -230,6 +236,7 @@ function refreshEstimates(){
   queries:[...operationalQueries.values()],gpsVehicles});
  renderEstimates();
  autoFitNationalOnce();
+ maybeRuiFallback();
 }
 function focusEstimatedMarkers(){
  const visible=estimatedVehicles.filter(v=>v.level==="cp-anchored"?
@@ -345,6 +352,7 @@ function refreshUnified(){
  renderGps();
  refreshEstimates();
  limitedCpNationalRefresh();
+ maybeRuiFallback();
 }
 async function queryCpNational(){
  const number=dom.cpNumber.value.trim(),date=dom.day.value;
@@ -539,6 +547,7 @@ function renderTrains(){
  routeLayer.clearLayers();
  renderGps();
  renderEstimates();
+ renderRuiFallback();
 }
 async function fetchSourceJson(base,path,timeoutMs=16000){
  const url=base+path;
@@ -601,10 +610,12 @@ async function loadDay(date){
   dom.freshness.textContent="GTFS CP "+cpSourceLabel+" · atualizado: "+new Date(data.generatedAt).toLocaleString("pt-PT");
   serviceDayWarning();
   renderStations();renderTrains();refreshUnified();map.invalidateSize();
+  gtfsLoadAttempted=true;maybeRuiFallback();
  }catch(e){
   if(request!==dayRequestSeq)return;
   setMessage("Horários indisponíveis: "+e.message);
   dom.trains.innerHTML="<p class='empty'>A importação GTFS tem de terminar com sucesso.</p>";
+  data=null;gtfsLoadAttempted=true;refreshEstimates();maybeRuiFallback();
  }
 }
 async function load(){
@@ -632,6 +643,7 @@ async function load(){
  }catch(e){
   setMessage("Não foi possível obter a base CP: "+e.message);
   dom.trains.innerHTML="<p class='empty'>Sem base GTFS importada. É necessária uma importação atualizada.</p>";
+  data=null;gtfsLoadAttempted=true;refreshEstimates();maybeRuiFallback();
  }
 }
 function checkServiceDayRollover(){
@@ -650,9 +662,9 @@ function checkServiceDayRollover(){
  }
 }
 
-dom.q.addEventListener("input",()=>{listLimit=PAGE_SIZE;renderTrains();renderGps();renderEstimates()});
+dom.q.addEventListener("input",()=>{listLimit=PAGE_SIZE;renderTrains();renderGps();renderEstimates();renderRuiFallback()});
 dom.day.addEventListener("change",()=>{manualDateSelection=true;listLimit=PAGE_SIZE;loadDay(dom.day.value)});
-dom.reload.onclick=()=>{didInitialAutoFit=false;load();loadGps();cpAutoLastBatch=0};
+dom.reload.onclick=()=>{didInitialAutoFit=false;gtfsLoadAttempted=false;load();loadGps();cpAutoLastBatch=0;};
 dom.focusGps.onclick=()=>focusGpsMarkers();
 dom.showNational.onclick=()=>{
  selected="ALL";dom.q.value="";listLimit=PAGE_SIZE;
@@ -669,3 +681,5 @@ setInterval(refreshEstimates,30000);
 setInterval(limitedCpNationalRefresh,5*60*1000);
 
 setInterval(checkServiceDayRollover,30000);
+
+setInterval(maybeRuiFallback,60000);
