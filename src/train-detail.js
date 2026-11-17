@@ -67,3 +67,14 @@ export function detailKindSource(kind,level){
  if(kind==="estimated")return "Previsão pelo horário GTFS CP";
  return "Horário programado GTFS CP";
 }
+
+
+// Date validity is checked by the caller. Do not call for GTFS-only times.
+export function etaCountdownMinutes(eta,nowMinutes,maxFutureMinutes=360){
+ const target=parseClock(eta);
+ if(target===null||!Number.isFinite(nowMinutes))return null;
+ const clock=((nowMinutes%1440)+1440)%1440;
+ let delta=target-clock;
+ if(delta < -720)delta+=1440; // Near-midnight trips.
+ return delta>=0&&delta<=maxFutureMinutes?Math.ceil(delta):null;
+}

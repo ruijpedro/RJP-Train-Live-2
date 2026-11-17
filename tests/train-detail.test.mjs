@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {detailStopTimes,detailStopProgress,detailKindSource,detailStatusText,clockLabel,parseClock} from "../src/train-detail.js";
+import {detailStopTimes,detailStopProgress,detailKindSource,detailStatusText,clockLabel,parseClock,etaCountdownMinutes} from "../src/train-detail.js";
 const train={type:"IR",number:"800",stops:[
  {name:"Coimbra-B",departure:"08:45:00"},{name:"Verride",arrival:"09:16:00"},
  {name:"Martingança - Maceira",arrival:"10:06:00"},{name:"Valado - Nazaré - Alcobaça",arrival:"10:25:00"}]};
@@ -28,4 +28,12 @@ test("UI labels keep evidence source explicit",()=>{
  assert.match(detailKindSource("estimated","cp-anchored"),/CP \+ GTFS/);
  assert.match(detailKindSource("gps"),/TML/);
  assert.match(detailKindSource("rui"),/contingência/);
+});
+
+test("CP ETA countdown is practical and respects midnight / past / unknown",()=>{
+ assert.equal(etaCountdownMinutes("08:32",8*60+28),4);
+ assert.equal(etaCountdownMinutes("00:04",23*60+58),6);
+ assert.equal(etaCountdownMinutes("08:20",8*60+28),null);
+ assert.equal(etaCountdownMinutes(null,8*60+28),null);
+ assert.equal(etaCountdownMinutes("16:00",8*60+28),null);
 });

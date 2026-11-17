@@ -15,7 +15,7 @@ import {coverageAudit} from "./coverage-audit.js";
 import {gpsIndicator,GPS_MAX_AGE_MS} from "./gps-indicator.js";
 import {buildEstimatedPositions,currentLisbon,previousServiceDate} from "./estimated-positions.js";
 import {REMOTE_CP_GTFS,usableManifest} from "./gtfs-sync.js";
-import {detailStopTimes,detailStopProgress,detailStatusText,detailServiceLabel,detailKindSource} from "./train-detail.js";
+import {detailStopTimes,detailStopProgress,detailStatusText,detailServiceLabel,detailKindSource,etaCountdownMinutes} from "./train-detail.js";
 import {RUI_DIRECT_URL,RUI_WORKER_RELAY,shouldUseRuiFallback,normalizeRuiFallback} from "./rui-fallback.js";
 
 const BASE = import.meta.env.BASE_URL;
@@ -192,12 +192,21 @@ function trainDetailsMarkup(kind,v,train,cp,{loading=false,error=""}={}){
   reported?"CP consultada às "+(sourceTime(cp.obtainedAt)??"—"):
   "Sem consulta CP recente.";
  const current=stops.filter(s=>s.eta!==null).length;
+ // Countdowns are shown only with current-day CP-supported ETA, never GTFS alone.
+ const serviceDate=kind==="estimated"?v.date:data?.date;
+ const clock=currentLisbon();
  const rows=stops.length?stops.slice(0,85).map((s,i)=>{
-  const label=s.etaSource==="cp-reported"?"ETA devolvido pela CP":
-   s.etaSource==="cp-delay"?"Calculado com atraso CP":"Sem ETA operacional";
+  const label=s.etaSource==="cp-reported"?"ETA informado pela CP":
+   s.etaSource==="cp-delay"?"Calculado com o atraso CP":"Horário programado";
   const highlighted=progress.lastIndex===i?" passed":progress.nextIndex===i?" upcoming":"";
+  const countdown=serviceDate===clock.date&&cp&&s.etaSource!=="unknown"?
+   etaCountdownMinutes(s.eta,clock.minutes):null;
+  const countdownText=countdown===0?"Agora (previsto)":countdown!==null?"Dentro de "+countdown+" min*":null;
   return '<div class="rjpEtaStop'+highlighted+'"><div class="rjpEtaStation">'+
-   '<b>'+safeText(s.name)+'</b><small>'+safeText(label)+'</small></div>'+
+   '<b>'+safeText(s.name)+'</b>'+
+   (progress.nextIndex===i?'<span class="rjpNextStop">Próxima paragem</span>':"")+
+   (countdownText?'<span class="rjpEtaCountdown">'+safeText(countdownText)+'</span>':"")+
+   '<small>'+safeText(label)+'</small></div>'+
    '<div class="rjpEtaHours"><span>Horário: '+safeText(s.scheduled??"—")+'</span>'+
    '<strong>ETA: '+safeText(s.eta??"indisponível")+'</strong></div></div>';
  }).join(""):'<p class="rjpEtaUnavailable">Sem paragens disponíveis para este comboio.</p>';
@@ -220,22 +229,23 @@ function trainDetailsMarkup(kind,v,train,cp,{loading=false,error=""}={}){
   '<div class="rjpTrainJourney"><strong>'+safeText(origin)+'</strong> <span>→</span> <strong>'+safeText(destination)+'</strong></div>'+
   '<p class="rjpTrainDelay">Atraso: <strong class="'+(delay!==null||fallbackDelay!==null?"known":"unknown")+'">'+safeText(delayText)+'</strong>'+
    (delayEvidence?'<small>'+safeText(delayEvidence)+'</small>':"")+'</p>'+
-  '<p class="rjpTrainFacts">Serviço: <b>'+safeText(detailServiceLabel(type))+'</b></p>'+
+  '<p class="rjpTrainFacts">Serviço: <b>'+safeText(cp?.serviceName??detailServiceLabel(type))+'</b></p>'+
   '<p class="rjpTrainFacts">Estado: <b>'+safeText(status)+'</b></p>'+
-  '<p class="rjpTrainFacts">Última estação indicada: <b>'+safeText(last??"Não indicada")+'</b></p>'+
-  '<p class="rjpTrainFacts">Próxima estação: <b>'+safeText(next??"Não confirmada")+'</b></p>'+
+  '<p class="rjpTrainFacts">Última: <b>'+safeText(last??"Não indicada")+'</b></p>'+
+  '<p class="rjpTrainFacts">Próxima: <b>'+safeText(next??"Não confirmada")+'</b>'+
+   (kind==="estimated"&&!cp?'<small> Estimada pelo horário</small>':"")+'</p>'+
   '<section class="rjpEtaSection"><h3>🕒 Chegadas estimadas (ETA)</h3>'+
   '<p class="rjpEtaIntro">Atualizado: '+safeText(stamp??"—")+
   ' · '+safeText(loading?"Consulta em curso":current?current+" horas previstas/estimadas": "sem ETA operacional")+'</p>'+
-  '<p class="rjpEtaIntro">Horários por estação da CP/GTFS. ETA apenas quando a CP comunica uma previsão ou atraso. '+
-  'Previsões não são passagens confirmadas.</p>'+
+  '<p class="rjpEtaIntro">Horário previsto + atraso comunicado pela CP, quando disponível. '+
+  'ETA e contagem de minutos são previsões, não passagens confirmadas.</p>'+
   '<div class="rjpEtaList">'+rows+'</div></section>'+
   '<section class="rjpSourceDetails"><p>Fonte: <strong>'+safeText(source)+'</strong></p>'+
+  '<details><summary>Mais informação · Fonte e precisão</summary>'+
   '<p class="rjpCpDetailStatus">'+safeText(stateLabel)+'</p>'+positionNote+
-  '<details><summary>Método e limitações</summary>'+
   '<p>'+safeText(kind==="estimated"?v.basis:kind==="gps"?"Posição reportada pela TML, sem interpolação":
    kind==="rui"?v.note:"Horário fornecido pelo GTFS CP")+'</p>'+
-  '<p>As posições estimadas e os ETA não devem ser usados para segurança da exploração ferroviária.</p>'+
+  '<p>* Tempo restante aproximado. As estimativas e os ETA não são adequados para segurança da exploração ferroviária.</p>'+
   '</details></section></div>';
 }
 function openTrainDetails(kind,v){

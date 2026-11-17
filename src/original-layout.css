@@ -228,3 +228,9 @@
 .rjpNextStop{display:inline-block;color:#d8f5ff;background:#205a78;border:1px solid #57a8cd;
  padding:3px 6px;border-radius:6px;margin-top:5px;font-size:10px;font-weight:800}
 .rjpTrainFacts small{font-size:10px;color:#b8cfdd}
+
+
+/* Keep advanced evidence collapsible: practical passenger details first. */
+.rjpSourceDetails>details{margin-top:6px}
+.rjpSourceDetails>details>summary{list-style-position:inside;cursor:pointer}
+.rjpSourceDetails>details p{font-size:12px;color:#b9cfdf;line-height:1.45}
