@@ -203,3 +203,28 @@
  .rjpEtaList{max-height:42dvh}
  .rjpEtaStop{padding:12px 9px}
 }
+
+
+/* Original Train Live cartography: 30px category circles, white 2px border
+   and shadow. Estimates retain type/color with small ≈ and dashed ring. */
+.rjpTrainMarkerIcon{background:transparent;border:0}
+.rjpTrainMapCircle{position:relative;width:30px;height:30px;display:flex;align-items:center;
+ justify-content:center;border-radius:50%;border:2px solid #fff;
+ background:var(--rjp-service-color,#2563eb);color:#fff;
+ font:bold 13px Arial,sans-serif;box-shadow:0 2px 6px #0007;line-height:1}
+.rjpTrainMapCircle.rjp-marker-real{border-style:solid}
+.rjpTrainMapCircle.rjp-marker-estimated{border-style:dashed;border-width:2px;
+ outline:1px solid #ffffff50;outline-offset:1px}
+.rjpTrainMapCircle.rjp-marker-backup{border-style:dotted;border-color:#ffdbb0}
+.rjpTrainMapCircle.rjp-marker-estimated .rjp-marker-approx,
+.rjpTrainMapCircle.rjp-marker-backup .rjp-marker-approx{position:absolute;right:-6px;top:-7px;
+ width:14px;height:14px;display:grid;place-items:center;border-radius:50%;
+ background:#0d263a;border:1px solid #fff;color:#fff;font:bold 11px Arial,sans-serif;
+ font-style:normal;line-height:1;box-shadow:0 1px 4px #0009}
+.rjpTrainMapCircle.rjp-marker-timetable .rjp-marker-approx{background:#845a1b}
+.rjpTrainMapCircle.rjp-marker-anchored .rjp-marker-approx{background:#6637a1}
+.rjpTrainMapCircle.rjp-marker-backup .rjp-marker-approx{background:#995628}
+.rjpEtaCountdown{display:block;color:#f9d889;font-size:12px;font-weight:800;margin-top:5px}
+.rjpNextStop{display:inline-block;color:#d8f5ff;background:#205a78;border:1px solid #57a8cd;
+ padding:3px 6px;border-radius:6px;margin-top:5px;font-size:10px;font-weight:800}
+.rjpTrainFacts small{font-size:10px;color:#b8cfdd}

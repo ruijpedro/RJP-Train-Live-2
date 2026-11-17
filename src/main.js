@@ -22,12 +22,13 @@ const BASE = import.meta.env.BASE_URL;
 const LOCAL_CP_BASE=BASE+"data/cp/";
 let cpSourceBase=LOCAL_CP_BASE,cpSourceLabel="APK";
 const TYPES = ["U","R","IR","IC","AP","SUD","CP","FT"];
-const COLORS = {U:"#3b82f6",R:"#22c55e",IR:"#a78bfa",IC:"#fb923c",AP:"#fb7185",SUD:"#2dd4bf",CP:"#94a3b8",FT:"#06b6d4"};
+// Original RJP Train Live palette, copied from source v2.12.x.
+const COLORS = {U:"#2563eb",R:"#16a34a",IR:"#7c3aed",IC:"#ea580c",AP:"#b91c1c",SUD:"#0f766e",CP:"#2563eb",FT:"#0891b2"};
 const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.13-beta.1 · ficha de comboio e ETA</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.14-beta.1 · ícones originais e ETA</small></div>
 </header>
 <div class="sourceNote"><strong>GPS real e estimativas nacionais</strong><span>Marcadores cheios: coordenadas reais TML. Marcadores ≈ tracejados: NÃO GPS. Roxo: estimativa ancorada na última estação CP; âmbar: previsão só pelo horário GTFS. As estimativas podem afastar-se muito da localização real.</span></div>
 <div class="controls">
@@ -125,10 +126,19 @@ function focusGpsMarkers(){
  }
 }
 
-function gpsIcon(type){
- const color=COLORS[type]||COLORS.CP;
- return L.divIcon({className:"gpsMarkerIcon",html:'<span class="gpsMarker" style="--color:'+color+'">'+safeText(type)+'</span>',iconSize:[34,34],iconAnchor:[17,17]});
+function trainMapIcon(type,kind="gps"){
+ const t=Object.hasOwn(COLORS,String(type))?String(type):"CP";
+ const color=COLORS[t],estimated=kind==="cp-anchored"||kind==="timetable";
+ const state=estimated?" rjp-marker-estimated "+(kind==="cp-anchored"?"rjp-marker-anchored":"rjp-marker-timetable"):
+  kind==="backup"?" rjp-marker-backup":" rjp-marker-real";
+ const badge=estimated?'<em class="rjp-marker-approx" aria-hidden="true">≈</em>':
+  kind==="backup"?'<em class="rjp-marker-approx" aria-hidden="true">!</em>':"";
+ const label=(estimated?"Posição estimada, não GPS: ":kind==="backup"?"Fonte de reserva: ":"GPS real TML: ")+t;
+ return L.divIcon({className:"rjpTrainMarkerIcon",html:'<span class="rjpTrainMapCircle'+state+
+  '" style="--rjp-service-color:'+color+'" title="'+safeText(label)+'">'+safeText(t)+badge+'</span>',
+  iconSize:[32,32],iconAnchor:[16,16]});
 }
+function gpsIcon(type){return trainMapIcon(type,"gps");}
 
 // Original-style dark modal for EVERY map marker. The GPS/estimate source remains
 // prominent. CP status is requested on tap, not guessed from a scheduled train.
@@ -315,13 +325,7 @@ function estimatedDetails(v){
   ' · consulta CP: '+safeText(cpTime)+'</p>'+
   '<p><strong>INCERTEZA ELEVADA:</strong> '+safeText(v.note)+'</p></div>';
 }
-function estimatedIcon(v){
- const anchored=v.level==="cp-anchored";
- const serviceColor=COLORS[v.type]||COLORS.CP;
- return L.divIcon({className:"estimateIcon",html:'<span class="estimateMarker '+(anchored?"cpAnchor":"scheduleOnly")+
-  '" style="--service-color:'+serviceColor+'" title="Estimativa NÃO GPS: '+safeText(v.type)+'">≈<small>'+safeText(v.type)+'</small></span>',
-  iconSize:[34,34],iconAnchor:[17,17]});
-}
+function estimatedIcon(v){return trainMapIcon(v.type,v.level);}
 function renderEstimates(){
  estimatedMarkers.clearLayers();
  const cpOn=dom.showCpEstimates.checked,gtfsOn=dom.showScheduleEstimates.checked;
@@ -457,9 +461,7 @@ function renderRuiFallback(){
  const markers=new Map();
  for(const v of visible){
   const marker=L.marker([v.latitude,v.longitude],{
-   icon:L.divIcon({className:"ruiMarkerIcon",
-    html:'<span class="ruiMarker" title="Rui Costa · contingência">'+safeText(v.type)+'</span>',
-    iconSize:[33,33],iconAnchor:[16,16]}),zIndexOffset:-800
+   icon:trainMapIcon(v.type,"backup"),zIndexOffset:-800
   }).addTo(ruiMarkers);
   const updated=new Date(v.checkedAt).toLocaleTimeString("pt-PT",{hour:"2-digit",minute:"2-digit"});
   marker.bindTooltip("Rui Costa · contingência · "+safeText(v.type+" "+v.number));

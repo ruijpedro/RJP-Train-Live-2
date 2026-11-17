@@ -114,7 +114,7 @@ jobs:
           code=f.read_text()
           code,n=re.subn(r'\bversionCode\s+\d+',f"versionCode {200000+int(os.environ['GITHUB_RUN_NUMBER'])}",code,count=1)
           assert n == 1
-          code,n=re.subn(r'\bversionName\s+["\'][^"\']+["\']','versionName "2.0.13-beta.1"',code,count=1)
+          code,n=re.subn(r'\bversionName\s+["\'][^"\']+["\']','versionName "2.0.14-beta.1"',code,count=1)
           assert n == 1
           f.write_text(code)
           PY

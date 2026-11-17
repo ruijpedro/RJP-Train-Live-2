@@ -1,6 +1,6 @@
 // The experimental RJP 2.0 engine is kept; only the user-facing DOM order
 // follows the RJP Train Live original. Move existing nodes BEFORE Leaflet init.
-export function installOriginalLayout({version="2.0.13-beta.1",base="./"}={}){
+export function installOriginalLayout({version="2.0.14-beta.1",base="./"}={}){
  const app=document.getElementById("app");
  const find=id=>app.querySelector("#"+id);
  const old={
