@@ -9,10 +9,12 @@ test("map categories use exact original RJP Train Live palette",()=>{
  assert.match(css,/width:30px;height:30px/);
  assert.match(css,/border:2px solid #fff/);
 });
-test("estimated icons retain type plus visible approximation marker",()=>{
+test("estimated icons retain type and a subtle outline, without floating badges",()=>{
  assert.match(src,/trainMapIcon\(v.type,v.level\)/);
  assert.match(css,/rjp-marker-estimated/);
- assert.match(css,/rjp-marker-approx/);
+ assert.doesNotMatch(src,/const badge=estimated\?/);
+ assert.match(src,/const badge="";/);
+ assert.match(css,/border-style:dashed/);
 });
 test("ETA is not shown as a countdown for GTFS-only services",()=>{
  assert.match(src,/serviceDate===clock.date&&cp&&s.etaSource!=="unknown"/);

@@ -28,7 +28,7 @@ const el = document.getElementById("app");
 el.innerHTML = `
 <header>
  <div class="brand"><div class="brandIcon">🚆</div><div><h1>RJP TRAIN LIVE <span>2.0</span></h1><p>Laboratório de fontes ferroviárias • CP + TML + IP</p></div></div>
- <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.14-beta.1 · ícones originais e ETA</small></div>
+ <div class="headRight"><strong>FONTES UNIFICADAS</strong><small>2.0.15-beta.1 · ícones originais e ETA</small></div>
 </header>
 <div class="sourceNote"><strong>GPS real e estimativas nacionais</strong><span>Marcadores cheios: coordenadas reais TML. Marcadores ≈ tracejados: NÃO GPS. Roxo: estimativa ancorada na última estação CP; âmbar: previsão só pelo horário GTFS. As estimativas podem afastar-se muito da localização real.</span></div>
 <div class="controls">
@@ -131,8 +131,9 @@ function trainMapIcon(type,kind="gps"){
  const color=COLORS[t],estimated=kind==="cp-anchored"||kind==="timetable";
  const state=estimated?" rjp-marker-estimated "+(kind==="cp-anchored"?"rjp-marker-anchored":"rjp-marker-timetable"):
   kind==="backup"?" rjp-marker-backup":" rjp-marker-real";
- const badge=estimated?'<em class="rjp-marker-approx" aria-hidden="true">≈</em>':
-  kind==="backup"?'<em class="rjp-marker-approx" aria-hidden="true">!</em>':"";
+ // No extra floating icons: the original app uses plain category circles.
+ // Provenance stays available on tap and in the train details.
+ const badge="";
  const label=(estimated?"Posição estimada, não GPS: ":kind==="backup"?"Fonte de reserva: ":"GPS real TML: ")+t;
  return L.divIcon({className:"rjpTrainMarkerIcon",html:'<span class="rjpTrainMapCircle'+state+
   '" style="--rjp-service-color:'+color+'" title="'+safeText(label)+'">'+safeText(t)+badge+'</span>',
