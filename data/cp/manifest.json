@@ -1,0 +1,49 @@
+{
+  "source": "CP GTFS (horários programados)",
+  "sourceUrl": "https://publico.cp.pt/gtfs/gtfs.zip",
+  "generatedAt": "2026-11-21T12:40:01+00:00",
+  "realtime": false,
+  "gps": false,
+  "days": [
+    {
+      "date": "2026-11-20",
+      "file": "2026-11-20.json",
+      "trains": 1337
+    },
+    {
+      "date": "2026-11-21",
+      "file": "2026-11-21.json",
+      "trains": 873
+    },
+    {
+      "date": "2026-11-22",
+      "file": "2026-11-22.json",
+      "trains": 857
+    },
+    {
+      "date": "2026-11-23",
+      "file": "2026-11-23.json",
+      "trains": 1354
+    },
+    {
+      "date": "2026-11-24",
+      "file": "2026-11-24.json",
+      "trains": 1355
+    },
+    {
+      "date": "2026-11-25",
+      "file": "2026-11-25.json",
+      "trains": 1355
+    },
+    {
+      "date": "2026-11-26",
+      "file": "2026-11-26.json",
+      "trains": 1355
+    },
+    {
+      "date": "2026-11-27",
+      "file": "2026-11-27.json",
+      "trains": 1357
+    }
+  ]
+}
